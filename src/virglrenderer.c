@@ -38,9 +38,12 @@
 
 #include "virglrenderer.h"
 
+#include "virgl_context.h"
+#include "virgl_resource.h"
+
 #ifdef HAVE_EPOXY_EGL_H
+#include "virgl_gbm.h"
 #include "virgl_egl.h"
-static struct virgl_egl *egl_info;
 #endif
 
 #ifdef HAVE_EPOXY_GLX_H
@@ -48,33 +51,105 @@ static struct virgl_egl *egl_info;
 static struct virgl_glx *glx_info;
 #endif
 
-enum {
-   CONTEXT_NONE,
-   CONTEXT_EGL,
-   CONTEXT_GLX
-};
-
-static int use_context = CONTEXT_NONE;
-
 /* new API - just wrap internal API for now */
 
-int virgl_renderer_resource_create(struct virgl_renderer_resource_create_args *args, struct iovec *iov, uint32_t num_iovs)
+static int virgl_renderer_resource_create_internal(struct virgl_renderer_resource_create_args *args,
+                                                   UNUSED struct iovec *iov, UNUSED uint32_t num_iovs,
+                                                   void *image)
 {
-   return vrend_renderer_resource_create((struct vrend_renderer_resource_create_args *)args, iov, num_iovs, NULL);
+   int ret;
+   struct pipe_resource *pipe_res;
+   struct vrend_renderer_resource_create_args vrend_args =  { 0 };
+
+   /* do not accept handle 0 */
+   if (args->handle == 0)
+      return EINVAL;
+
+   vrend_args.target = args->target;
+   vrend_args.format = args->format;
+   vrend_args.bind = args->bind;
+   vrend_args.width = args->width;
+   vrend_args.height = args->height;
+   vrend_args.depth = args->depth;
+   vrend_args.array_size = args->array_size;
+   vrend_args.nr_samples = args->nr_samples;
+   vrend_args.last_level = args->last_level;
+   vrend_args.flags = args->flags;
+
+   pipe_res = vrend_renderer_resource_create(&vrend_args, image);
+   if (!pipe_res)
+      return EINVAL;
+
+   ret = virgl_resource_create_from_pipe(args->handle, pipe_res);
+   if (ret) {
+      vrend_renderer_resource_destroy((struct vrend_resource *)pipe_res);
+      return ret;
+   }
+
+   if (!ret && num_iovs) {
+      ret = virgl_renderer_resource_attach_iov(args->handle, iov, num_iovs);
+      if (ret) {
+         virgl_resource_remove(args->handle);
+         return ret;
+      }
+   }
+
+   return 0;
+}
+
+int virgl_renderer_resource_create(struct virgl_renderer_resource_create_args *args,
+                                   struct iovec *iov, uint32_t num_iovs)
+{
+   return virgl_renderer_resource_create_internal(args, iov, num_iovs, NULL);
 }
 
 int virgl_renderer_resource_import_eglimage(struct virgl_renderer_resource_create_args *args, void *image)
 {
 #ifdef HAVE_EPOXY_EGL_H
-   return vrend_renderer_resource_create((struct vrend_renderer_resource_create_args *)args, 0, 0, image);
+   return virgl_renderer_resource_create_internal(args, NULL, 0, image);
 #else
    return EINVAL;
 #endif
 }
 
+void virgl_renderer_resource_set_priv(uint32_t res_handle, void *priv)
+{
+   struct virgl_resource *res = virgl_resource_lookup(res_handle);
+   if (!res)
+      return;
+
+   res->private_data = priv;
+}
+
+void *virgl_renderer_resource_get_priv(uint32_t res_handle)
+{
+   struct virgl_resource *res = virgl_resource_lookup(res_handle);
+   if (!res)
+      return NULL;
+
+   return res->private_data;
+}
+
+static bool detach_resource(struct virgl_context *ctx, void *data)
+{
+   struct virgl_resource *res = data;
+   ctx->detach_resource(ctx, res);
+   return true;
+}
+
 void virgl_renderer_resource_unref(uint32_t res_handle)
 {
-   vrend_renderer_resource_unref(res_handle);
+   struct virgl_resource *res = virgl_resource_lookup(res_handle);
+   struct virgl_context_foreach_args args;
+
+   if (!res)
+      return;
+
+   args.callback = detach_resource;
+   args.data = res;
+   virgl_context_foreach(&args);
+
+   virgl_resource_remove(res->res_id);
 }
 
 void virgl_renderer_fill_caps(uint32_t set, uint32_t version,
@@ -85,19 +160,42 @@ void virgl_renderer_fill_caps(uint32_t set, uint32_t version,
 
 int virgl_renderer_context_create(uint32_t handle, uint32_t nlen, const char *name)
 {
-   return vrend_renderer_context_create(handle, nlen, name);
+   struct virgl_context *ctx;
+   int ret;
+
+   /* user context id must be greater than 0 */
+   if (handle == 0)
+      return EINVAL;
+
+   if (virgl_context_lookup(handle))
+      return 0;
+
+   ctx = vrend_renderer_context_create(handle, nlen, name);
+   if (!ctx)
+      return ENOMEM;
+
+   ret = virgl_context_add(ctx);
+   if (ret) {
+      ctx->destroy(ctx);
+      return ret;
+   }
+
+   return 0;
 }
 
 void virgl_renderer_context_destroy(uint32_t handle)
 {
-   vrend_renderer_context_destroy(handle);
+   virgl_context_remove(handle);
 }
 
 int virgl_renderer_submit_cmd(void *buffer,
                               int ctx_id,
                               int ndw)
 {
-   return vrend_decode_block(ctx_id, buffer, ndw);
+   struct virgl_context *ctx = virgl_context_lookup(ctx_id);
+   if (!ctx)
+      return EINVAL;
+   return ctx->submit_cmd(ctx, buffer, sizeof(uint32_t) * ndw);
 }
 
 int virgl_renderer_transfer_write_iov(uint32_t handle,
@@ -110,10 +208,12 @@ int virgl_renderer_transfer_write_iov(uint32_t handle,
                                       struct iovec *iovec,
                                       unsigned int iovec_cnt)
 {
+   struct virgl_resource *res = virgl_resource_lookup(handle);
    struct vrend_transfer_info transfer_info;
 
-   transfer_info.handle = handle;
-   transfer_info.ctx_id = ctx_id;
+   if (!res)
+      return EINVAL;
+
    transfer_info.level = level;
    transfer_info.stride = stride;
    transfer_info.layer_stride = layer_stride;
@@ -121,8 +221,22 @@ int virgl_renderer_transfer_write_iov(uint32_t handle,
    transfer_info.offset = offset;
    transfer_info.iovec = iovec;
    transfer_info.iovec_cnt = iovec_cnt;
+   transfer_info.synchronized = false;
 
-   return vrend_renderer_transfer_iov(&transfer_info, VREND_TRANSFER_WRITE);
+   if (ctx_id) {
+      struct virgl_context *ctx = virgl_context_lookup(ctx_id);
+      if (!ctx)
+         return EINVAL;
+
+      return ctx->transfer_3d(ctx, res, &transfer_info,
+                              VIRGL_TRANSFER_TO_HOST);
+   } else {
+      if (!res->pipe_resource)
+         return EINVAL;
+
+      return vrend_renderer_transfer_pipe(res->pipe_resource, &transfer_info,
+                                          VIRGL_TRANSFER_TO_HOST);
+   }
 }
 
 int virgl_renderer_transfer_read_iov(uint32_t handle, uint32_t ctx_id,
@@ -132,10 +246,12 @@ int virgl_renderer_transfer_read_iov(uint32_t handle, uint32_t ctx_id,
                                      uint64_t offset, struct iovec *iovec,
                                      int iovec_cnt)
 {
+   struct virgl_resource *res = virgl_resource_lookup(handle);
    struct vrend_transfer_info transfer_info;
 
-   transfer_info.handle = handle;
-   transfer_info.ctx_id = ctx_id;
+   if (!res)
+      return EINVAL;
+
    transfer_info.level = level;
    transfer_info.stride = stride;
    transfer_info.layer_stride = layer_stride;
@@ -143,19 +259,46 @@ int virgl_renderer_transfer_read_iov(uint32_t handle, uint32_t ctx_id,
    transfer_info.offset = offset;
    transfer_info.iovec = iovec;
    transfer_info.iovec_cnt = iovec_cnt;
+   transfer_info.synchronized = false;
 
-   return vrend_renderer_transfer_iov(&transfer_info, VREND_TRANSFER_READ);
+   if (ctx_id) {
+      struct virgl_context *ctx = virgl_context_lookup(ctx_id);
+      if (!ctx)
+         return EINVAL;
+
+      return ctx->transfer_3d(ctx, res, &transfer_info,
+                              VIRGL_TRANSFER_FROM_HOST);
+   } else {
+      if (!res->pipe_resource)
+         return EINVAL;
+
+      return vrend_renderer_transfer_pipe(res->pipe_resource, &transfer_info,
+                                          VIRGL_TRANSFER_FROM_HOST);
+   }
 }
 
 int virgl_renderer_resource_attach_iov(int res_handle, struct iovec *iov,
                                        int num_iovs)
 {
-   return vrend_renderer_resource_attach_iov(res_handle, iov, num_iovs);
+   struct virgl_resource *res = virgl_resource_lookup(res_handle);
+   if (!res)
+      return EINVAL;
+
+   return virgl_resource_attach_iov(res, iov, num_iovs);
 }
 
 void virgl_renderer_resource_detach_iov(int res_handle, struct iovec **iov_p, int *num_iovs_p)
 {
-   return vrend_renderer_resource_detach_iov(res_handle, iov_p, num_iovs_p);
+   struct virgl_resource *res = virgl_resource_lookup(res_handle);
+   if (!res)
+      return;
+
+   if (iov_p)
+      *iov_p = (struct iovec *)res->iov;
+   if (num_iovs_p)
+      *num_iovs_p = res->iov_count;
+
+   virgl_resource_detach_iov(res);
 }
 
 int virgl_renderer_create_fence(int client_fence_id, uint32_t ctx_id)
@@ -170,22 +313,39 @@ void virgl_renderer_force_ctx_0(void)
 
 void virgl_renderer_ctx_attach_resource(int ctx_id, int res_handle)
 {
-   vrend_renderer_attach_res_ctx(ctx_id, res_handle);
+   struct virgl_context *ctx = virgl_context_lookup(ctx_id);
+   struct virgl_resource *res = virgl_resource_lookup(res_handle);
+   if (!ctx || !res)
+      return;
+   ctx->attach_resource(ctx, res);
 }
 
 void virgl_renderer_ctx_detach_resource(int ctx_id, int res_handle)
 {
-   vrend_renderer_detach_res_ctx(ctx_id, res_handle);
+   struct virgl_context *ctx = virgl_context_lookup(ctx_id);
+   struct virgl_resource *res = virgl_resource_lookup(res_handle);
+   if (!ctx || !res)
+      return;
+   ctx->detach_resource(ctx, res);
 }
 
 int virgl_renderer_resource_get_info(int res_handle,
                                      struct virgl_renderer_resource_info *info)
 {
+   struct virgl_resource *res = virgl_resource_lookup(res_handle);
    int ret;
-   ret = vrend_renderer_resource_get_info(res_handle, (struct vrend_renderer_resource_info *)info);
+
+   if (!res || !res->pipe_resource)
+      return EINVAL;
+   if (!info)
+      return EINVAL;
+
+   ret = vrend_renderer_resource_get_info(res->pipe_resource,
+                                          (struct vrend_renderer_resource_info *)info);
+   info->handle = res_handle;
 #ifdef HAVE_EPOXY_EGL_H
    if (ret == 0 && use_context == CONTEXT_EGL)
-      return virgl_egl_get_fourcc_for_texture(egl_info, info->tex_id, info->virgl_format, &info->drm_fourcc);
+      return virgl_egl_get_fourcc_for_texture(egl, info->tex_id, info->virgl_format, &info->drm_fourcc);
 #endif
 
    return ret;
@@ -200,7 +360,12 @@ void virgl_renderer_get_cap_set(uint32_t cap_set, uint32_t *max_ver,
 void virgl_renderer_get_rect(int resource_id, struct iovec *iov, unsigned int num_iovs,
                              uint32_t offset, int x, int y, int width, int height)
 {
-   vrend_renderer_get_rect(resource_id, iov, num_iovs, offset, x, y, width, height);
+   struct virgl_resource *res = virgl_resource_lookup(resource_id);
+   if (!res || !res->pipe_resource)
+      return;
+
+   vrend_renderer_get_rect(res->pipe_resource, iov, num_iovs, offset, x, y,
+                           width, height);
 }
 
 
@@ -221,7 +386,7 @@ static virgl_renderer_gl_context create_gl_context(int scanout_idx, struct virgl
 
 #ifdef HAVE_EPOXY_EGL_H
    if (use_context == CONTEXT_EGL)
-      return virgl_egl_create_context(egl_info, param);
+      return virgl_egl_create_context(egl, param);
 #endif
 #ifdef HAVE_EPOXY_GLX_H
    if (use_context == CONTEXT_GLX)
@@ -237,27 +402,31 @@ static virgl_renderer_gl_context create_gl_context(int scanout_idx, struct virgl
 static void destroy_gl_context(virgl_renderer_gl_context ctx)
 {
 #ifdef HAVE_EPOXY_EGL_H
-   if (use_context == CONTEXT_EGL)
-      return virgl_egl_destroy_context(egl_info, ctx);
+   if (use_context == CONTEXT_EGL) {
+      virgl_egl_destroy_context(egl, ctx);
+      return;
+   }
 #endif
 #ifdef HAVE_EPOXY_GLX_H
-   if (use_context == CONTEXT_GLX)
-      return virgl_glx_destroy_context(glx_info, ctx);
+   if (use_context == CONTEXT_GLX) {
+      virgl_glx_destroy_context(glx_info, ctx);
+      return;
+   }
 #endif
-   return rcbs->destroy_gl_context(dev_cookie, ctx);
+   rcbs->destroy_gl_context(dev_cookie, ctx);
 }
 
-static int make_current(int scanout_idx, virgl_renderer_gl_context ctx)
+static int make_current(virgl_renderer_gl_context ctx)
 {
 #ifdef HAVE_EPOXY_EGL_H
    if (use_context == CONTEXT_EGL)
-      return virgl_egl_make_context_current(egl_info, ctx);
+      return virgl_egl_make_context_current(egl, ctx);
 #endif
 #ifdef HAVE_EPOXY_GLX_H
    if (use_context == CONTEXT_GLX)
       return virgl_glx_make_context_current(glx_info, ctx);
 #endif
-   return rcbs->make_current(dev_cookie, scanout_idx, ctx);
+   return rcbs->make_current(dev_cookie, 0, ctx);
 }
 
 static struct vrend_if_cbs virgl_cbs = {
@@ -269,23 +438,35 @@ static struct vrend_if_cbs virgl_cbs = {
 
 void *virgl_renderer_get_cursor_data(uint32_t resource_id, uint32_t *width, uint32_t *height)
 {
-   return vrend_renderer_get_cursor_contents(resource_id, width, height);
+   struct virgl_resource *res = virgl_resource_lookup(resource_id);
+   if (!res || !res->pipe_resource)
+      return NULL;
+
+   vrend_renderer_force_ctx_0();
+   return vrend_renderer_get_cursor_contents(res->pipe_resource,
+                                             width,
+                                             height);
 }
 
 void virgl_renderer_poll(void)
 {
-   vrend_renderer_check_queries();
    vrend_renderer_check_fences();
 }
 
 void virgl_renderer_cleanup(UNUSED void *cookie)
 {
    vrend_renderer_fini();
+   virgl_context_table_cleanup();
+
 #ifdef HAVE_EPOXY_EGL_H
    if (use_context == CONTEXT_EGL) {
-      virgl_egl_destroy(egl_info);
-      egl_info = NULL;
+      virgl_egl_destroy(egl);
+      egl = NULL;
       use_context = CONTEXT_NONE;
+      if (gbm) {
+         virgl_gbm_fini(gbm);
+         gbm = NULL;
+      }
    }
 #endif
 #ifdef HAVE_EPOXY_GLX_H
@@ -315,13 +496,29 @@ int virgl_renderer_init(void *cookie, int flags, struct virgl_renderer_callbacks
       if (cbs->version >= 2 && cbs->get_drm_fd) {
          fd = cbs->get_drm_fd(cookie);
       }
-      egl_info = virgl_egl_init(fd, flags & VIRGL_RENDERER_USE_SURFACELESS,
-                                    flags & VIRGL_RENDERER_USE_GLES);
-      if (!egl_info)
+
+      /*
+       * If the user specifies a preferred DRM fd and we can't use it, fail. If the user doesn't
+       * specify an fd, it's possible to initialize EGL without one.
+       */
+      gbm = virgl_gbm_init(fd);
+      if (fd > 0 && !gbm)
          return -1;
+
+      egl = virgl_egl_init(gbm, flags & VIRGL_RENDERER_USE_SURFACELESS,
+                           flags & VIRGL_RENDERER_USE_GLES);
+      if (!egl) {
+         if (gbm) {
+            virgl_gbm_fini(gbm);
+            gbm = NULL;
+         }
+
+         return -1;
+      }
+
       use_context = CONTEXT_EGL;
 #else
-      fprintf(stderr, "EGL is not supported on this platform\n");
+      vrend_printf( "EGL is not supported on this platform\n");
       return -1;
 #endif
    } else if (flags & VIRGL_RENDERER_USE_GLX) {
@@ -331,13 +528,20 @@ int virgl_renderer_init(void *cookie, int flags, struct virgl_renderer_callbacks
          return -1;
       use_context = CONTEXT_GLX;
 #else
-      fprintf(stderr, "GLX is not supported on this platform\n");
+      vrend_printf( "GLX is not supported on this platform\n");
       return -1;
 #endif
    }
 
+   if (virgl_context_table_init())
+      return -1;
+
    if (flags & VIRGL_RENDERER_THREAD_SYNC)
       renderer_flags |= VREND_USE_THREAD_SYNC;
+#ifdef VIRGL_RENDERER_UNSTABLE_APIS
+   if (flags & VIRGL_RENDERER_USE_EXTERNAL_BLOB)
+      renderer_flags |= VREND_USE_EXTERNAL_BLOB;
+#endif /* VIRGL_RENDERER_UNSTABLE_APIS */
 
    return vrend_renderer_init(&virgl_cbs, renderer_flags);
 }
@@ -345,7 +549,10 @@ int virgl_renderer_init(void *cookie, int flags, struct virgl_renderer_callbacks
 int virgl_renderer_get_fd_for_texture(uint32_t tex_id, int *fd)
 {
 #ifdef HAVE_EPOXY_EGL_H
-   return virgl_egl_get_fd_for_texture(egl_info, tex_id, fd);
+   if (!egl)
+      return -1;
+
+   return virgl_egl_get_fd_for_texture(egl, tex_id, fd);
 #else
    return -1;
 #endif
@@ -354,7 +561,10 @@ int virgl_renderer_get_fd_for_texture(uint32_t tex_id, int *fd)
 int virgl_renderer_get_fd_for_texture2(uint32_t tex_id, int *fd, int *stride, int *offset)
 {
 #ifdef HAVE_EPOXY_EGL_H
-   return virgl_egl_get_fd_for_texture2(egl_info, tex_id, fd, stride, offset);
+   if (!egl)
+      return -1;
+
+   return virgl_egl_get_fd_for_texture2(egl, tex_id, fd, stride, offset);
 #else
    return -1;
 #endif
@@ -369,3 +579,136 @@ int virgl_renderer_get_poll_fd(void)
 {
    return vrend_renderer_get_poll_fd();
 }
+
+virgl_debug_callback_type virgl_set_debug_callback(virgl_debug_callback_type cb)
+{
+   return vrend_set_debug_callback(cb);
+}
+
+static int virgl_renderer_export_query(void *execute_args, uint32_t execute_size)
+{
+   struct virgl_resource *res;
+   struct virgl_renderer_export_query *export_query = execute_args;
+   if (execute_size != sizeof(struct virgl_renderer_export_query))
+      return -EINVAL;
+
+   if (export_query->hdr.size != sizeof(struct virgl_renderer_export_query))
+      return -EINVAL;
+
+   res = virgl_resource_lookup(export_query->in_resource_id);
+   if (!res || !res->pipe_resource)
+      return -EINVAL;
+
+   return vrend_renderer_export_query(res->pipe_resource, export_query);
+}
+
+static int virgl_renderer_supported_structures(void *execute_args, uint32_t execute_size)
+{
+   struct virgl_renderer_supported_structures *supported_structures = execute_args;
+   if (execute_size != sizeof(struct virgl_renderer_supported_structures))
+      return -EINVAL;
+
+   if (supported_structures->hdr.size != sizeof(struct virgl_renderer_supported_structures))
+      return -EINVAL;
+
+   if (supported_structures->in_stype_version == 0) {
+      supported_structures->out_supported_structures_mask =
+         VIRGL_RENDERER_STRUCTURE_TYPE_EXPORT_QUERY |
+         VIRGL_RENDERER_STRUCTURE_TYPE_SUPPORTED_STRUCTURES;
+   } else {
+      supported_structures->out_supported_structures_mask = 0;
+   }
+
+   return 0;
+}
+
+int virgl_renderer_execute(void *execute_args, uint32_t execute_size)
+{
+   struct virgl_renderer_hdr *hdr = execute_args;
+   if (hdr->stype_version != 0)
+      return -EINVAL;
+
+   switch (hdr->stype) {
+      case VIRGL_RENDERER_STRUCTURE_TYPE_SUPPORTED_STRUCTURES:
+         return virgl_renderer_supported_structures(execute_args, execute_size);
+      case VIRGL_RENDERER_STRUCTURE_TYPE_EXPORT_QUERY:
+         return virgl_renderer_export_query(execute_args, execute_size);
+      default:
+         return -EINVAL;
+   }
+}
+
+#ifdef VIRGL_RENDERER_UNSTABLE_APIS
+
+int virgl_renderer_resource_create_blob(const struct virgl_renderer_resource_create_blob_args *args)
+{
+
+   int ret;
+   uint32_t blob_mem = args->blob_mem;
+   uint64_t blob_id = args->blob_id;
+   uint32_t res_handle = args->res_handle;
+   struct pipe_resource *pipe_res;
+
+   if (blob_mem == VIRGL_RENDERER_BLOB_MEM_HOST3D ||
+       blob_mem == VIRGL_RENDERER_BLOB_MEM_HOST3D_GUEST) {
+      struct virgl_context *ctx = virgl_context_lookup(args->ctx_id);
+      if (!ctx)
+         return -EINVAL;
+
+      pipe_res = ctx->get_blob_pipe(ctx, blob_id);
+      if (!pipe_res)
+         return -EINVAL;
+
+      ret = virgl_resource_create_from_pipe(res_handle, pipe_res);
+      if (ret) {
+         vrend_renderer_resource_destroy((struct vrend_resource *)pipe_res);
+         return ret;
+      }
+
+      if (blob_mem == VIRGL_RENDERER_BLOB_MEM_HOST3D_GUEST) {
+         ret = virgl_renderer_resource_attach_iov(res_handle, args->iovecs, args->num_iovs);
+         if (ret) {
+            virgl_resource_remove(res_handle);
+            return ret;
+         }
+      }
+   } else if (blob_mem == VIRGL_RENDERER_BLOB_MEM_GUEST) {
+      ret = virgl_resource_create_from_iov(res_handle, args->iovecs, args->num_iovs);
+      if (ret)
+         return -EINVAL;
+   } else {
+      return -EINVAL;
+   }
+
+
+   return 0;
+}
+
+int virgl_renderer_resource_map(uint32_t res_handle, void **map, uint64_t *out_size)
+{
+   struct virgl_resource *res = virgl_resource_lookup(res_handle);
+   if (!res || !res->pipe_resource)
+      return -EINVAL;
+
+   return vrend_renderer_resource_map(res->pipe_resource, map, out_size);
+}
+
+int virgl_renderer_resource_unmap(uint32_t res_handle)
+{
+   struct virgl_resource *res = virgl_resource_lookup(res_handle);
+   if (!res || !res->pipe_resource)
+      return -EINVAL;
+
+   return vrend_renderer_resource_unmap(res->pipe_resource);
+}
+
+int virgl_renderer_resource_get_map_info(uint32_t res_handle, uint32_t *map_info)
+{
+   struct virgl_resource *res = virgl_resource_lookup(res_handle);
+   if (!res || !res->pipe_resource)
+      return -EINVAL;
+
+   return vrend_renderer_resource_get_map_info(res->pipe_resource, map_info);
+}
+
+#endif /* VIRGL_RENDERER_UNSTABLE_APIS */
