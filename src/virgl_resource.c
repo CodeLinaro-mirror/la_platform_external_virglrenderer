@@ -26,7 +26,9 @@
 
 #include <assert.h>
 #include <errno.h>
+#include <fcntl.h>
 #include <string.h>
+#include <unistd.h>
 
 #include "util/u_hash_table.h"
 #include "util/u_pointer.h"
@@ -42,6 +44,8 @@ virgl_resource_destroy_func(void *val)
 
    if (res->pipe_resource)
       pipe_callbacks.unref(res->pipe_resource, pipe_callbacks.data);
+   if (res->fd_type != VIRGL_RESOURCE_FD_INVALID)
+      close(res->fd);
 
    free(res);
 }
@@ -92,12 +96,17 @@ virgl_resource_create(uint32_t res_id)
    }
 
    res->res_id = res_id;
+   res->fd_type = VIRGL_RESOURCE_FD_INVALID;
+   res->fd = -1;
 
    return res;
 }
 
 int
-virgl_resource_create_from_pipe(uint32_t res_id, struct pipe_resource *pres)
+virgl_resource_create_from_pipe(uint32_t res_id,
+                                struct pipe_resource *pres,
+                                const struct iovec *iov,
+                                int iov_count)
 {
    struct virgl_resource *res;
 
@@ -107,6 +116,34 @@ virgl_resource_create_from_pipe(uint32_t res_id, struct pipe_resource *pres)
 
    /* take ownership */
    res->pipe_resource = pres;
+
+   res->iov = iov;
+   res->iov_count = iov_count;
+
+   return 0;
+}
+
+int
+virgl_resource_create_from_fd(uint32_t res_id,
+                              enum virgl_resource_fd_type fd_type,
+                              int fd,
+                              const struct iovec *iov,
+                              int iov_count)
+{
+   struct virgl_resource *res;
+
+   assert(fd_type != VIRGL_RESOURCE_FD_INVALID  && fd >= 0);
+
+   res = virgl_resource_create(res_id);
+   if (!res)
+      return ENOMEM;
+
+   res->fd_type = fd_type;
+   /* take ownership */
+   res->fd = fd;
+
+   res->iov = iov;
+   res->iov_count = iov_count;
 
    return 0;
 }
@@ -175,4 +212,25 @@ virgl_resource_detach_iov(struct virgl_resource *res)
 
    res->iov = NULL;
    res->iov_count = 0;
+}
+
+enum virgl_resource_fd_type
+virgl_resource_export_fd(struct virgl_resource *res, int *fd)
+{
+   if (res->fd_type != VIRGL_RESOURCE_FD_INVALID) {
+#ifdef F_DUPFD_CLOEXEC
+      *fd = fcntl(res->fd, F_DUPFD_CLOEXEC, 0);
+      if (*fd < 0)
+         *fd = dup(res->fd);
+#else
+      *fd = dup(res->fd);
+#endif
+      return *fd >= 0 ? res->fd_type : VIRGL_RESOURCE_FD_INVALID;
+   } else if (res->pipe_resource) {
+      return pipe_callbacks.export_fd(res->pipe_resource,
+                                      fd,
+                                      pipe_callbacks.data);
+   }
+
+   return VIRGL_RESOURCE_FD_INVALID;
 }
