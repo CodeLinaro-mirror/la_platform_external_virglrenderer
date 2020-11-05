@@ -37,6 +37,7 @@
 #include "vrend_renderer.h"
 
 #include "virglrenderer.h"
+#include "virglrenderer_hw.h"
 
 #include "virgl_context.h"
 #include "virgl_resource.h"
@@ -80,18 +81,10 @@ static int virgl_renderer_resource_create_internal(struct virgl_renderer_resourc
    if (!pipe_res)
       return EINVAL;
 
-   ret = virgl_resource_create_from_pipe(args->handle, pipe_res);
+   ret = virgl_resource_create_from_pipe(args->handle, pipe_res, iov, num_iovs);
    if (ret) {
       vrend_renderer_resource_destroy((struct vrend_resource *)pipe_res);
       return ret;
-   }
-
-   if (!ret && num_iovs) {
-      ret = virgl_renderer_resource_attach_iov(args->handle, iov, num_iovs);
-      if (ret) {
-         virgl_resource_remove(args->handle);
-         return ret;
-      }
    }
 
    return 0;
@@ -155,7 +148,16 @@ void virgl_renderer_resource_unref(uint32_t res_handle)
 void virgl_renderer_fill_caps(uint32_t set, uint32_t version,
                               void *caps)
 {
-   vrend_renderer_fill_caps(set, version, (union virgl_caps *)caps);
+   switch (set) {
+   case VIRGL_RENDERER_CAPSET_VIRGL:
+      vrend_renderer_fill_caps(VREND_CAP_SET, version, (union virgl_caps *)caps);
+      break;
+   case VIRGL_RENDERER_CAPSET_VIRGL2:
+      vrend_renderer_fill_caps(VREND_CAP_SET2, version, (union virgl_caps *)caps);
+      break;
+   default:
+      break;
+   }
 }
 
 int virgl_renderer_context_create(uint32_t handle, uint32_t nlen, const char *name)
@@ -354,7 +356,18 @@ int virgl_renderer_resource_get_info(int res_handle,
 void virgl_renderer_get_cap_set(uint32_t cap_set, uint32_t *max_ver,
                                 uint32_t *max_size)
 {
-   vrend_renderer_get_cap_set(cap_set, max_ver, max_size);
+   switch (cap_set) {
+   case VIRGL_RENDERER_CAPSET_VIRGL:
+      vrend_renderer_get_cap_set(VREND_CAP_SET, max_ver, max_size);
+      break;
+   case VIRGL_RENDERER_CAPSET_VIRGL2:
+      vrend_renderer_get_cap_set(VREND_CAP_SET2, max_ver, max_size);
+      break;
+   default:
+      *max_ver = 0;
+      *max_size = 0;
+      break;
+   }
 }
 
 void virgl_renderer_get_rect(int resource_id, struct iovec *iov, unsigned int num_iovs,
@@ -538,10 +551,8 @@ int virgl_renderer_init(void *cookie, int flags, struct virgl_renderer_callbacks
 
    if (flags & VIRGL_RENDERER_THREAD_SYNC)
       renderer_flags |= VREND_USE_THREAD_SYNC;
-#ifdef VIRGL_RENDERER_UNSTABLE_APIS
    if (flags & VIRGL_RENDERER_USE_EXTERNAL_BLOB)
       renderer_flags |= VREND_USE_EXTERNAL_BLOB;
-#endif /* VIRGL_RENDERER_UNSTABLE_APIS */
 
    return vrend_renderer_init(&virgl_cbs, renderer_flags);
 }
@@ -638,48 +649,83 @@ int virgl_renderer_execute(void *execute_args, uint32_t execute_size)
    }
 }
 
-#ifdef VIRGL_RENDERER_UNSTABLE_APIS
-
 int virgl_renderer_resource_create_blob(const struct virgl_renderer_resource_create_blob_args *args)
 {
-
+   struct virgl_context *ctx;
+   struct virgl_context_blob blob;
+   bool has_host_storage;
+   bool has_guest_storage;
    int ret;
-   uint32_t blob_mem = args->blob_mem;
-   uint64_t blob_id = args->blob_id;
-   uint32_t res_handle = args->res_handle;
-   struct pipe_resource *pipe_res;
 
-   if (blob_mem == VIRGL_RENDERER_BLOB_MEM_HOST3D ||
-       blob_mem == VIRGL_RENDERER_BLOB_MEM_HOST3D_GUEST) {
-      struct virgl_context *ctx = virgl_context_lookup(args->ctx_id);
-      if (!ctx)
-         return -EINVAL;
-
-      pipe_res = ctx->get_blob_pipe(ctx, blob_id);
-      if (!pipe_res)
-         return -EINVAL;
-
-      ret = virgl_resource_create_from_pipe(res_handle, pipe_res);
-      if (ret) {
-         vrend_renderer_resource_destroy((struct vrend_resource *)pipe_res);
-         return ret;
-      }
-
-      if (blob_mem == VIRGL_RENDERER_BLOB_MEM_HOST3D_GUEST) {
-         ret = virgl_renderer_resource_attach_iov(res_handle, args->iovecs, args->num_iovs);
-         if (ret) {
-            virgl_resource_remove(res_handle);
-            return ret;
-         }
-      }
-   } else if (blob_mem == VIRGL_RENDERER_BLOB_MEM_GUEST) {
-      ret = virgl_resource_create_from_iov(res_handle, args->iovecs, args->num_iovs);
-      if (ret)
-         return -EINVAL;
-   } else {
+   switch (args->blob_mem) {
+   case VIRGL_RENDERER_BLOB_MEM_GUEST:
+      has_host_storage = false;
+      has_guest_storage = true;
+      break;
+   case VIRGL_RENDERER_BLOB_MEM_HOST3D:
+      has_host_storage = true;
+      has_guest_storage = false;
+      break;
+   case VIRGL_RENDERER_BLOB_MEM_HOST3D_GUEST:
+      has_host_storage = true;
+      has_guest_storage = true;
+      break;
+   default:
       return -EINVAL;
    }
 
+   /* user resource id must be greater than 0 */
+   if (args->res_handle == 0)
+      return -EINVAL;
+
+   if (args->size == 0)
+      return -EINVAL;
+   if (has_guest_storage) {
+      const size_t iov_size = vrend_get_iovec_size(args->iovecs, args->num_iovs);
+      if (iov_size < args->size)
+         return -EINVAL;
+   } else {
+      if (args->num_iovs)
+         return -EINVAL;
+   }
+
+   if (!has_host_storage) {
+      return virgl_resource_create_from_iov(args->res_handle,
+                                            args->iovecs,
+                                            args->num_iovs);
+   }
+
+   ctx = virgl_context_lookup(args->ctx_id);
+   if (!ctx)
+      return -EINVAL;
+
+   ret = ctx->get_blob(ctx, args->blob_id, args->blob_flags, &blob);
+   if (ret)
+      return ret;
+
+   if (blob.type != VIRGL_RESOURCE_FD_INVALID) {
+      ret = virgl_resource_create_from_fd(args->res_handle,
+                                          blob.type,
+                                          blob.u.fd,
+                                          args->iovecs,
+                                          args->num_iovs);
+      if (ret) {
+         close(blob.u.fd);
+         return ret;
+      }
+   } else {
+      ret = virgl_resource_create_from_pipe(args->res_handle,
+                                            blob.u.pipe_resource,
+                                            args->iovecs,
+                                            args->num_iovs);
+      if (ret) {
+         vrend_renderer_resource_destroy((struct vrend_resource *)blob.u.pipe_resource);
+         return ret;
+      }
+   }
+
+   if (ctx->get_blob_done)
+      ctx->get_blob_done(ctx, args->res_handle, &blob);
 
    return 0;
 }
@@ -711,4 +757,23 @@ int virgl_renderer_resource_get_map_info(uint32_t res_handle, uint32_t *map_info
    return vrend_renderer_resource_get_map_info(res->pipe_resource, map_info);
 }
 
-#endif /* VIRGL_RENDERER_UNSTABLE_APIS */
+int
+virgl_renderer_resource_export_blob(uint32_t res_id, uint32_t *fd_type, int *fd)
+{
+   struct virgl_resource *res = virgl_resource_lookup(res_id);
+   if (!res)
+      return EINVAL;
+
+   switch (virgl_resource_export_fd(res, fd)) {
+   case VIRGL_RESOURCE_FD_DMABUF:
+      *fd_type = VIRGL_RENDERER_BLOB_FD_TYPE_DMABUF;
+      break;
+   case VIRGL_RESOURCE_FD_OPAQUE:
+      *fd_type = VIRGL_RENDERER_BLOB_FD_TYPE_OPAQUE;
+      break;
+   default:
+      return EINVAL;
+   }
+
+   return 0;
+}
