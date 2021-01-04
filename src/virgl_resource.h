@@ -30,6 +30,13 @@
 struct iovec;
 struct pipe_resource;
 
+enum virgl_resource_fd_type {
+   VIRGL_RESOURCE_FD_DMABUF,
+   VIRGL_RESOURCE_FD_OPAQUE,
+
+   VIRGL_RESOURCE_FD_INVALID = -1,
+};
+
 /**
  * A global cross-context resource.  A virgl_resource is not directly usable
  * by renderer contexts, but must be attached and imported into renderer
@@ -41,12 +48,15 @@ struct pipe_resource;
 struct virgl_resource {
    uint32_t res_id;
 
+   struct pipe_resource *pipe_resource;
+
+   enum virgl_resource_fd_type fd_type;
+   int fd;
+
    const struct iovec *iov;
    int iov_count;
 
    void *private_data;
-
-   struct pipe_resource *pipe_resource;
 };
 
 struct virgl_resource_pipe_callbacks {
@@ -59,6 +69,10 @@ struct virgl_resource_pipe_callbacks {
                       int iov_count,
                       void *data);
    void (*detach_iov)(struct pipe_resource *pres, void *data);
+
+   enum virgl_resource_fd_type (*export_fd)(struct pipe_resource *pres,
+                                            int *fd,
+                                            void *data);
 };
 
 int
@@ -71,7 +85,17 @@ void
 virgl_resource_table_reset(void);
 
 int
-virgl_resource_create_from_pipe(uint32_t res_id, struct pipe_resource *pres);
+virgl_resource_create_from_pipe(uint32_t res_id,
+                                struct pipe_resource *pres,
+                                const struct iovec *iov,
+                                int iov_count);
+
+int
+virgl_resource_create_from_fd(uint32_t res_id,
+                              enum virgl_resource_fd_type fd_type,
+                              int fd,
+                              const struct iovec *iov,
+                              int iov_count);
 
 int
 virgl_resource_create_from_iov(uint32_t res_id,
@@ -91,5 +115,8 @@ virgl_resource_attach_iov(struct virgl_resource *res,
 
 void
 virgl_resource_detach_iov(struct virgl_resource *res);
+
+enum virgl_resource_fd_type
+virgl_resource_export_fd(struct virgl_resource *res, int *fd);
 
 #endif /* VIRGL_RESOURCE_H */
