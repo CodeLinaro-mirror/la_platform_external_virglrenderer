@@ -87,7 +87,7 @@ cc_library {
             // binary GPU drivers to be loaded from the host, which might be linked
             // to a system copy of libdrm, which conflicts with the AOSP one
             allow_undefined_symbols: true,
-            header_libs: ["libdrm"],
+            header_libs: ["libdrm_headers"],
             shared_libs: [
                 "libepoxy",
                 "libgbm"
@@ -111,4 +111,8 @@ cc_library {
             ],
         },
     },
+    apex_available: [
+        "//apex_available:platform",
+        "com.android.virt",
+    ],
 }
