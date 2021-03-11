@@ -10286,6 +10286,734 @@ util_format_etc2_rg11_snorm_description = {
    UTIL_FORMAT_COLORSPACE_RGB,
 };
 
+const struct util_format_description
+util_format_astc_4x4_description = {
+   PIPE_FORMAT_ASTC_4x4,
+   "PIPE_FORMAT_ASTC_4x4",
+   "astc_4x4",
+   {4, 4, 128},	/* block */
+   UTIL_FORMAT_LAYOUT_ASTC,
+   1,	/* nr_channels */
+   FALSE,	/* is_array */
+   FALSE,	/* is_bitmask */
+   FALSE,	/* is_mixed */
+   {
+      {UTIL_FORMAT_TYPE_VOID, FALSE, FALSE, 128, 0},	/* x = x */
+      {0, 0, 0, 0, 0},
+      {0, 0, 0, 0, 0},
+      {0, 0, 0, 0, 0}
+   },
+   {
+      UTIL_FORMAT_SWIZZLE_X,	/* r */
+      UTIL_FORMAT_SWIZZLE_Y,	/* g */
+      UTIL_FORMAT_SWIZZLE_Z,	/* b */
+      UTIL_FORMAT_SWIZZLE_W	/* a */
+   },
+   UTIL_FORMAT_COLORSPACE_RGB,
+};
+
+const struct util_format_description
+util_format_astc_5x4_description = {
+   PIPE_FORMAT_ASTC_5x4,
+   "PIPE_FORMAT_ASTC_5x4",
+   "astc_5x4",
+   {5, 4, 128},	/* block */
+   UTIL_FORMAT_LAYOUT_ASTC,
+   1,	/* nr_channels */
+   FALSE,	/* is_array */
+   FALSE,	/* is_bitmask */
+   FALSE,	/* is_mixed */
+   {
+      {UTIL_FORMAT_TYPE_VOID, FALSE, FALSE, 128, 0},	/* x = x */
+      {0, 0, 0, 0, 0},
+      {0, 0, 0, 0, 0},
+      {0, 0, 0, 0, 0}
+   },
+   {
+      UTIL_FORMAT_SWIZZLE_X,	/* r */
+      UTIL_FORMAT_SWIZZLE_Y,	/* g */
+      UTIL_FORMAT_SWIZZLE_Z,	/* b */
+      UTIL_FORMAT_SWIZZLE_W	/* a */
+   },
+   UTIL_FORMAT_COLORSPACE_RGB,
+};
+
+const struct util_format_description
+util_format_astc_5x5_description = {
+   PIPE_FORMAT_ASTC_5x5,
+   "PIPE_FORMAT_ASTC_5x5",
+   "astc_5x5",
+   {5, 5, 128},	/* block */
+   UTIL_FORMAT_LAYOUT_ASTC,
+   1,	/* nr_channels */
+   FALSE,	/* is_array */
+   FALSE,	/* is_bitmask */
+   FALSE,	/* is_mixed */
+   {
+      {UTIL_FORMAT_TYPE_VOID, FALSE, FALSE, 128, 0},	/* x = x */
+      {0, 0, 0, 0, 0},
+      {0, 0, 0, 0, 0},
+      {0, 0, 0, 0, 0}
+   },
+   {
+      UTIL_FORMAT_SWIZZLE_X,	/* r */
+      UTIL_FORMAT_SWIZZLE_Y,	/* g */
+      UTIL_FORMAT_SWIZZLE_Z,	/* b */
+      UTIL_FORMAT_SWIZZLE_W	/* a */
+   },
+   UTIL_FORMAT_COLORSPACE_RGB,
+};
+
+const struct util_format_description
+util_format_astc_6x5_description = {
+   PIPE_FORMAT_ASTC_6x5,
+   "PIPE_FORMAT_ASTC_6x5",
+   "astc_6x5",
+   {6, 5, 128},	/* block */
+   UTIL_FORMAT_LAYOUT_ASTC,
+   1,	/* nr_channels */
+   FALSE,	/* is_array */
+   FALSE,	/* is_bitmask */
+   FALSE,	/* is_mixed */
+   {
+      {UTIL_FORMAT_TYPE_VOID, FALSE, FALSE, 128, 0},	/* x = x */
+      {0, 0, 0, 0, 0},
+      {0, 0, 0, 0, 0},
+      {0, 0, 0, 0, 0}
+   },
+   {
+      UTIL_FORMAT_SWIZZLE_X,	/* r */
+      UTIL_FORMAT_SWIZZLE_Y,	/* g */
+      UTIL_FORMAT_SWIZZLE_Z,	/* b */
+      UTIL_FORMAT_SWIZZLE_W	/* a */
+   },
+   UTIL_FORMAT_COLORSPACE_RGB,
+};
+
+const struct util_format_description
+util_format_astc_6x6_description = {
+   PIPE_FORMAT_ASTC_6x6,
+   "PIPE_FORMAT_ASTC_6x6",
+   "astc_6x6",
+   {6, 6, 128},	/* block */
+   UTIL_FORMAT_LAYOUT_ASTC,
+   1,	/* nr_channels */
+   FALSE,	/* is_array */
+   FALSE,	/* is_bitmask */
+   FALSE,	/* is_mixed */
+   {
+      {UTIL_FORMAT_TYPE_VOID, FALSE, FALSE, 128, 0},	/* x = x */
+      {0, 0, 0, 0, 0},
+      {0, 0, 0, 0, 0},
+      {0, 0, 0, 0, 0}
+   },
+   {
+      UTIL_FORMAT_SWIZZLE_X,	/* r */
+      UTIL_FORMAT_SWIZZLE_Y,	/* g */
+      UTIL_FORMAT_SWIZZLE_Z,	/* b */
+      UTIL_FORMAT_SWIZZLE_W	/* a */
+   },
+   UTIL_FORMAT_COLORSPACE_RGB,
+};
+
+const struct util_format_description
+util_format_astc_8x5_description = {
+   PIPE_FORMAT_ASTC_8x5,
+   "PIPE_FORMAT_ASTC_8x5",
+   "astc_8x5",
+   {8, 5, 128},	/* block */
+   UTIL_FORMAT_LAYOUT_ASTC,
+   1,	/* nr_channels */
+   FALSE,	/* is_array */
+   FALSE,	/* is_bitmask */
+   FALSE,	/* is_mixed */
+   {
+      {UTIL_FORMAT_TYPE_VOID, FALSE, FALSE, 128, 0},	/* x = x */
+      {0, 0, 0, 0, 0},
+      {0, 0, 0, 0, 0},
+      {0, 0, 0, 0, 0}
+   },
+   {
+      UTIL_FORMAT_SWIZZLE_X,	/* r */
+      UTIL_FORMAT_SWIZZLE_Y,	/* g */
+      UTIL_FORMAT_SWIZZLE_Z,	/* b */
+      UTIL_FORMAT_SWIZZLE_W	/* a */
+   },
+   UTIL_FORMAT_COLORSPACE_RGB,
+};
+
+const struct util_format_description
+util_format_astc_8x6_description = {
+   PIPE_FORMAT_ASTC_8x6,
+   "PIPE_FORMAT_ASTC_8x6",
+   "astc_8x6",
+   {8, 6, 128},	/* block */
+   UTIL_FORMAT_LAYOUT_ASTC,
+   1,	/* nr_channels */
+   FALSE,	/* is_array */
+   FALSE,	/* is_bitmask */
+   FALSE,	/* is_mixed */
+   {
+      {UTIL_FORMAT_TYPE_VOID, FALSE, FALSE, 128, 0},	/* x = x */
+      {0, 0, 0, 0, 0},
+      {0, 0, 0, 0, 0},
+      {0, 0, 0, 0, 0}
+   },
+   {
+      UTIL_FORMAT_SWIZZLE_X,	/* r */
+      UTIL_FORMAT_SWIZZLE_Y,	/* g */
+      UTIL_FORMAT_SWIZZLE_Z,	/* b */
+      UTIL_FORMAT_SWIZZLE_W	/* a */
+   },
+   UTIL_FORMAT_COLORSPACE_RGB,
+};
+
+const struct util_format_description
+util_format_astc_8x8_description = {
+   PIPE_FORMAT_ASTC_8x8,
+   "PIPE_FORMAT_ASTC_8x8",
+   "astc_8x8",
+   {8, 8, 128},	/* block */
+   UTIL_FORMAT_LAYOUT_ASTC,
+   1,	/* nr_channels */
+   FALSE,	/* is_array */
+   FALSE,	/* is_bitmask */
+   FALSE,	/* is_mixed */
+   {
+      {UTIL_FORMAT_TYPE_VOID, FALSE, FALSE, 128, 0},	/* x = x */
+      {0, 0, 0, 0, 0},
+      {0, 0, 0, 0, 0},
+      {0, 0, 0, 0, 0}
+   },
+   {
+      UTIL_FORMAT_SWIZZLE_X,	/* r */
+      UTIL_FORMAT_SWIZZLE_Y,	/* g */
+      UTIL_FORMAT_SWIZZLE_Z,	/* b */
+      UTIL_FORMAT_SWIZZLE_W	/* a */
+   },
+   UTIL_FORMAT_COLORSPACE_RGB,
+};
+
+const struct util_format_description
+util_format_astc_10x5_description = {
+   PIPE_FORMAT_ASTC_10x5,
+   "PIPE_FORMAT_ASTC_10x5",
+   "astc_10x5",
+   {10, 5, 128},	/* block */
+   UTIL_FORMAT_LAYOUT_ASTC,
+   1,	/* nr_channels */
+   FALSE,	/* is_array */
+   FALSE,	/* is_bitmask */
+   FALSE,	/* is_mixed */
+   {
+      {UTIL_FORMAT_TYPE_VOID, FALSE, FALSE, 128, 0},	/* x = x */
+      {0, 0, 0, 0, 0},
+      {0, 0, 0, 0, 0},
+      {0, 0, 0, 0, 0}
+   },
+   {
+      UTIL_FORMAT_SWIZZLE_X,	/* r */
+      UTIL_FORMAT_SWIZZLE_Y,	/* g */
+      UTIL_FORMAT_SWIZZLE_Z,	/* b */
+      UTIL_FORMAT_SWIZZLE_W	/* a */
+   },
+   UTIL_FORMAT_COLORSPACE_RGB,
+};
+
+const struct util_format_description
+util_format_astc_10x6_description = {
+   PIPE_FORMAT_ASTC_10x6,
+   "PIPE_FORMAT_ASTC_10x6",
+   "astc_10x6",
+   {10, 6, 128},	/* block */
+   UTIL_FORMAT_LAYOUT_ASTC,
+   1,	/* nr_channels */
+   FALSE,	/* is_array */
+   FALSE,	/* is_bitmask */
+   FALSE,	/* is_mixed */
+   {
+      {UTIL_FORMAT_TYPE_VOID, FALSE, FALSE, 128, 0},	/* x = x */
+      {0, 0, 0, 0, 0},
+      {0, 0, 0, 0, 0},
+      {0, 0, 0, 0, 0}
+   },
+   {
+      UTIL_FORMAT_SWIZZLE_X,	/* r */
+      UTIL_FORMAT_SWIZZLE_Y,	/* g */
+      UTIL_FORMAT_SWIZZLE_Z,	/* b */
+      UTIL_FORMAT_SWIZZLE_W	/* a */
+   },
+   UTIL_FORMAT_COLORSPACE_RGB,
+};
+
+const struct util_format_description
+util_format_astc_10x8_description = {
+   PIPE_FORMAT_ASTC_10x8,
+   "PIPE_FORMAT_ASTC_10x8",
+   "astc_10x8",
+   {10, 8, 128},	/* block */
+   UTIL_FORMAT_LAYOUT_ASTC,
+   1,	/* nr_channels */
+   FALSE,	/* is_array */
+   FALSE,	/* is_bitmask */
+   FALSE,	/* is_mixed */
+   {
+      {UTIL_FORMAT_TYPE_VOID, FALSE, FALSE, 128, 0},	/* x = x */
+      {0, 0, 0, 0, 0},
+      {0, 0, 0, 0, 0},
+      {0, 0, 0, 0, 0}
+   },
+   {
+      UTIL_FORMAT_SWIZZLE_X,	/* r */
+      UTIL_FORMAT_SWIZZLE_Y,	/* g */
+      UTIL_FORMAT_SWIZZLE_Z,	/* b */
+      UTIL_FORMAT_SWIZZLE_W	/* a */
+   },
+   UTIL_FORMAT_COLORSPACE_RGB,
+};
+
+const struct util_format_description
+util_format_astc_10x10_description = {
+   PIPE_FORMAT_ASTC_10x10,
+   "PIPE_FORMAT_ASTC_10x10",
+   "astc_10x10",
+   {10, 10, 128},	/* block */
+   UTIL_FORMAT_LAYOUT_ASTC,
+   1,	/* nr_channels */
+   FALSE,	/* is_array */
+   FALSE,	/* is_bitmask */
+   FALSE,	/* is_mixed */
+   {
+      {UTIL_FORMAT_TYPE_VOID, FALSE, FALSE, 128, 0},	/* x = x */
+      {0, 0, 0, 0, 0},
+      {0, 0, 0, 0, 0},
+      {0, 0, 0, 0, 0}
+   },
+   {
+      UTIL_FORMAT_SWIZZLE_X,	/* r */
+      UTIL_FORMAT_SWIZZLE_Y,	/* g */
+      UTIL_FORMAT_SWIZZLE_Z,	/* b */
+      UTIL_FORMAT_SWIZZLE_W	/* a */
+   },
+   UTIL_FORMAT_COLORSPACE_RGB,
+};
+
+const struct util_format_description
+util_format_astc_12x10_description = {
+   PIPE_FORMAT_ASTC_12x10,
+   "PIPE_FORMAT_ASTC_12x10",
+   "astc_12x10",
+   {12, 10, 128},	/* block */
+   UTIL_FORMAT_LAYOUT_ASTC,
+   1,	/* nr_channels */
+   FALSE,	/* is_array */
+   FALSE,	/* is_bitmask */
+   FALSE,	/* is_mixed */
+   {
+      {UTIL_FORMAT_TYPE_VOID, FALSE, FALSE, 128, 0},	/* x = x */
+      {0, 0, 0, 0, 0},
+      {0, 0, 0, 0, 0},
+      {0, 0, 0, 0, 0}
+   },
+   {
+      UTIL_FORMAT_SWIZZLE_X,	/* r */
+      UTIL_FORMAT_SWIZZLE_Y,	/* g */
+      UTIL_FORMAT_SWIZZLE_Z,	/* b */
+      UTIL_FORMAT_SWIZZLE_W	/* a */
+   },
+   UTIL_FORMAT_COLORSPACE_RGB,
+};
+
+const struct util_format_description
+util_format_astc_12x12_description = {
+   PIPE_FORMAT_ASTC_12x12,
+   "PIPE_FORMAT_ASTC_12x12",
+   "astc_12x12",
+   {12, 12, 128},	/* block */
+   UTIL_FORMAT_LAYOUT_ASTC,
+   1,	/* nr_channels */
+   FALSE,	/* is_array */
+   FALSE,	/* is_bitmask */
+   FALSE,	/* is_mixed */
+   {
+      {UTIL_FORMAT_TYPE_VOID, FALSE, FALSE, 128, 0},	/* x = x */
+      {0, 0, 0, 0, 0},
+      {0, 0, 0, 0, 0},
+      {0, 0, 0, 0, 0}
+   },
+   {
+      UTIL_FORMAT_SWIZZLE_X,	/* r */
+      UTIL_FORMAT_SWIZZLE_Y,	/* g */
+      UTIL_FORMAT_SWIZZLE_Z,	/* b */
+      UTIL_FORMAT_SWIZZLE_W	/* a */
+   },
+   UTIL_FORMAT_COLORSPACE_RGB,
+};
+
+const struct util_format_description
+util_format_astc_4x4_srgb_description = {
+   PIPE_FORMAT_ASTC_4x4_SRGB,
+   "PIPE_FORMAT_ASTC_4x4_SRGB",
+   "astc_4x4_srgb",
+   {4, 4, 128},	/* block */
+   UTIL_FORMAT_LAYOUT_ASTC,
+   1,	/* nr_channels */
+   FALSE,	/* is_array */
+   FALSE,	/* is_bitmask */
+   FALSE,	/* is_mixed */
+   {
+      {UTIL_FORMAT_TYPE_VOID, FALSE, FALSE, 128, 0},	/* x = x */
+      {0, 0, 0, 0, 0},
+      {0, 0, 0, 0, 0},
+      {0, 0, 0, 0, 0}
+   },
+   {
+      UTIL_FORMAT_SWIZZLE_X,	/* sr */
+      UTIL_FORMAT_SWIZZLE_Y,	/* sg */
+      UTIL_FORMAT_SWIZZLE_Z,	/* sb */
+      UTIL_FORMAT_SWIZZLE_W	/* a */
+   },
+   UTIL_FORMAT_COLORSPACE_SRGB,
+};
+
+const struct util_format_description
+util_format_astc_5x4_srgb_description = {
+   PIPE_FORMAT_ASTC_5x4_SRGB,
+   "PIPE_FORMAT_ASTC_5x4_SRGB",
+   "astc_5x4_srgb",
+   {5, 4, 128},	/* block */
+   UTIL_FORMAT_LAYOUT_ASTC,
+   1,	/* nr_channels */
+   FALSE,	/* is_array */
+   FALSE,	/* is_bitmask */
+   FALSE,	/* is_mixed */
+   {
+      {UTIL_FORMAT_TYPE_VOID, FALSE, FALSE, 128, 0},	/* x = x */
+      {0, 0, 0, 0, 0},
+      {0, 0, 0, 0, 0},
+      {0, 0, 0, 0, 0}
+   },
+   {
+      UTIL_FORMAT_SWIZZLE_X,	/* sr */
+      UTIL_FORMAT_SWIZZLE_Y,	/* sg */
+      UTIL_FORMAT_SWIZZLE_Z,	/* sb */
+      UTIL_FORMAT_SWIZZLE_W	/* a */
+   },
+   UTIL_FORMAT_COLORSPACE_SRGB,
+};
+
+const struct util_format_description
+util_format_astc_5x5_srgb_description = {
+   PIPE_FORMAT_ASTC_5x5_SRGB,
+   "PIPE_FORMAT_ASTC_5x5_SRGB",
+   "astc_5x5_srgb",
+   {5, 5, 128},	/* block */
+   UTIL_FORMAT_LAYOUT_ASTC,
+   1,	/* nr_channels */
+   FALSE,	/* is_array */
+   FALSE,	/* is_bitmask */
+   FALSE,	/* is_mixed */
+   {
+      {UTIL_FORMAT_TYPE_VOID, FALSE, FALSE, 128, 0},	/* x = x */
+      {0, 0, 0, 0, 0},
+      {0, 0, 0, 0, 0},
+      {0, 0, 0, 0, 0}
+   },
+   {
+      UTIL_FORMAT_SWIZZLE_X,	/* sr */
+      UTIL_FORMAT_SWIZZLE_Y,	/* sg */
+      UTIL_FORMAT_SWIZZLE_Z,	/* sb */
+      UTIL_FORMAT_SWIZZLE_W	/* a */
+   },
+   UTIL_FORMAT_COLORSPACE_SRGB,
+};
+
+const struct util_format_description
+util_format_astc_6x5_srgb_description = {
+   PIPE_FORMAT_ASTC_6x5_SRGB,
+   "PIPE_FORMAT_ASTC_6x5_SRGB",
+   "astc_6x5_srgb",
+   {6, 5, 128},	/* block */
+   UTIL_FORMAT_LAYOUT_ASTC,
+   1,	/* nr_channels */
+   FALSE,	/* is_array */
+   FALSE,	/* is_bitmask */
+   FALSE,	/* is_mixed */
+   {
+      {UTIL_FORMAT_TYPE_VOID, FALSE, FALSE, 128, 0},	/* x = x */
+      {0, 0, 0, 0, 0},
+      {0, 0, 0, 0, 0},
+      {0, 0, 0, 0, 0}
+   },
+   {
+      UTIL_FORMAT_SWIZZLE_X,	/* sr */
+      UTIL_FORMAT_SWIZZLE_Y,	/* sg */
+      UTIL_FORMAT_SWIZZLE_Z,	/* sb */
+      UTIL_FORMAT_SWIZZLE_W	/* a */
+   },
+   UTIL_FORMAT_COLORSPACE_SRGB,
+};
+
+const struct util_format_description
+util_format_astc_6x6_srgb_description = {
+   PIPE_FORMAT_ASTC_6x6_SRGB,
+   "PIPE_FORMAT_ASTC_6x6_SRGB",
+   "astc_6x6_srgb",
+   {6, 6, 128},	/* block */
+   UTIL_FORMAT_LAYOUT_ASTC,
+   1,	/* nr_channels */
+   FALSE,	/* is_array */
+   FALSE,	/* is_bitmask */
+   FALSE,	/* is_mixed */
+   {
+      {UTIL_FORMAT_TYPE_VOID, FALSE, FALSE, 128, 0},	/* x = x */
+      {0, 0, 0, 0, 0},
+      {0, 0, 0, 0, 0},
+      {0, 0, 0, 0, 0}
+   },
+   {
+      UTIL_FORMAT_SWIZZLE_X,	/* sr */
+      UTIL_FORMAT_SWIZZLE_Y,	/* sg */
+      UTIL_FORMAT_SWIZZLE_Z,	/* sb */
+      UTIL_FORMAT_SWIZZLE_W	/* a */
+   },
+   UTIL_FORMAT_COLORSPACE_SRGB,
+};
+
+const struct util_format_description
+util_format_astc_8x5_srgb_description = {
+   PIPE_FORMAT_ASTC_8x5_SRGB,
+   "PIPE_FORMAT_ASTC_8x5_SRGB",
+   "astc_8x5_srgb",
+   {8, 5, 128},	/* block */
+   UTIL_FORMAT_LAYOUT_ASTC,
+   1,	/* nr_channels */
+   FALSE,	/* is_array */
+   FALSE,	/* is_bitmask */
+   FALSE,	/* is_mixed */
+   {
+      {UTIL_FORMAT_TYPE_VOID, FALSE, FALSE, 128, 0},	/* x = x */
+      {0, 0, 0, 0, 0},
+      {0, 0, 0, 0, 0},
+      {0, 0, 0, 0, 0}
+   },
+   {
+      UTIL_FORMAT_SWIZZLE_X,	/* sr */
+      UTIL_FORMAT_SWIZZLE_Y,	/* sg */
+      UTIL_FORMAT_SWIZZLE_Z,	/* sb */
+      UTIL_FORMAT_SWIZZLE_W	/* a */
+   },
+   UTIL_FORMAT_COLORSPACE_SRGB,
+};
+
+const struct util_format_description
+util_format_astc_8x6_srgb_description = {
+   PIPE_FORMAT_ASTC_8x6_SRGB,
+   "PIPE_FORMAT_ASTC_8x6_SRGB",
+   "astc_8x6_srgb",
+   {8, 6, 128},	/* block */
+   UTIL_FORMAT_LAYOUT_ASTC,
+   1,	/* nr_channels */
+   FALSE,	/* is_array */
+   FALSE,	/* is_bitmask */
+   FALSE,	/* is_mixed */
+   {
+      {UTIL_FORMAT_TYPE_VOID, FALSE, FALSE, 128, 0},	/* x = x */
+      {0, 0, 0, 0, 0},
+      {0, 0, 0, 0, 0},
+      {0, 0, 0, 0, 0}
+   },
+   {
+      UTIL_FORMAT_SWIZZLE_X,	/* sr */
+      UTIL_FORMAT_SWIZZLE_Y,	/* sg */
+      UTIL_FORMAT_SWIZZLE_Z,	/* sb */
+      UTIL_FORMAT_SWIZZLE_W	/* a */
+   },
+   UTIL_FORMAT_COLORSPACE_SRGB,
+};
+
+const struct util_format_description
+util_format_astc_8x8_srgb_description = {
+   PIPE_FORMAT_ASTC_8x8_SRGB,
+   "PIPE_FORMAT_ASTC_8x8_SRGB",
+   "astc_8x8_srgb",
+   {8, 8, 128},	/* block */
+   UTIL_FORMAT_LAYOUT_ASTC,
+   1,	/* nr_channels */
+   FALSE,	/* is_array */
+   FALSE,	/* is_bitmask */
+   FALSE,	/* is_mixed */
+   {
+      {UTIL_FORMAT_TYPE_VOID, FALSE, FALSE, 128, 0},	/* x = x */
+      {0, 0, 0, 0, 0},
+      {0, 0, 0, 0, 0},
+      {0, 0, 0, 0, 0}
+   },
+   {
+      UTIL_FORMAT_SWIZZLE_X,	/* sr */
+      UTIL_FORMAT_SWIZZLE_Y,	/* sg */
+      UTIL_FORMAT_SWIZZLE_Z,	/* sb */
+      UTIL_FORMAT_SWIZZLE_W	/* a */
+   },
+   UTIL_FORMAT_COLORSPACE_SRGB,
+};
+
+const struct util_format_description
+util_format_astc_10x5_srgb_description = {
+   PIPE_FORMAT_ASTC_10x5_SRGB,
+   "PIPE_FORMAT_ASTC_10x5_SRGB",
+   "astc_10x5_srgb",
+   {10, 5, 128},	/* block */
+   UTIL_FORMAT_LAYOUT_ASTC,
+   1,	/* nr_channels */
+   FALSE,	/* is_array */
+   FALSE,	/* is_bitmask */
+   FALSE,	/* is_mixed */
+   {
+      {UTIL_FORMAT_TYPE_VOID, FALSE, FALSE, 128, 0},	/* x = x */
+      {0, 0, 0, 0, 0},
+      {0, 0, 0, 0, 0},
+      {0, 0, 0, 0, 0}
+   },
+   {
+      UTIL_FORMAT_SWIZZLE_X,	/* sr */
+      UTIL_FORMAT_SWIZZLE_Y,	/* sg */
+      UTIL_FORMAT_SWIZZLE_Z,	/* sb */
+      UTIL_FORMAT_SWIZZLE_W	/* a */
+   },
+   UTIL_FORMAT_COLORSPACE_SRGB,
+};
+
+const struct util_format_description
+util_format_astc_10x6_srgb_description = {
+   PIPE_FORMAT_ASTC_10x6_SRGB,
+   "PIPE_FORMAT_ASTC_10x6_SRGB",
+   "astc_10x6_srgb",
+   {10, 6, 128},	/* block */
+   UTIL_FORMAT_LAYOUT_ASTC,
+   1,	/* nr_channels */
+   FALSE,	/* is_array */
+   FALSE,	/* is_bitmask */
+   FALSE,	/* is_mixed */
+   {
+      {UTIL_FORMAT_TYPE_VOID, FALSE, FALSE, 128, 0},	/* x = x */
+      {0, 0, 0, 0, 0},
+      {0, 0, 0, 0, 0},
+      {0, 0, 0, 0, 0}
+   },
+   {
+      UTIL_FORMAT_SWIZZLE_X,	/* sr */
+      UTIL_FORMAT_SWIZZLE_Y,	/* sg */
+      UTIL_FORMAT_SWIZZLE_Z,	/* sb */
+      UTIL_FORMAT_SWIZZLE_W	/* a */
+   },
+   UTIL_FORMAT_COLORSPACE_SRGB,
+};
+
+const struct util_format_description
+util_format_astc_10x8_srgb_description = {
+   PIPE_FORMAT_ASTC_10x8_SRGB,
+   "PIPE_FORMAT_ASTC_10x8_SRGB",
+   "astc_10x8_srgb",
+   {10, 8, 128},	/* block */
+   UTIL_FORMAT_LAYOUT_ASTC,
+   1,	/* nr_channels */
+   FALSE,	/* is_array */
+   FALSE,	/* is_bitmask */
+   FALSE,	/* is_mixed */
+   {
+      {UTIL_FORMAT_TYPE_VOID, FALSE, FALSE, 128, 0},	/* x = x */
+      {0, 0, 0, 0, 0},
+      {0, 0, 0, 0, 0},
+      {0, 0, 0, 0, 0}
+   },
+   {
+      UTIL_FORMAT_SWIZZLE_X,	/* sr */
+      UTIL_FORMAT_SWIZZLE_Y,	/* sg */
+      UTIL_FORMAT_SWIZZLE_Z,	/* sb */
+      UTIL_FORMAT_SWIZZLE_W	/* a */
+   },
+   UTIL_FORMAT_COLORSPACE_SRGB,
+};
+
+const struct util_format_description
+util_format_astc_10x10_srgb_description = {
+   PIPE_FORMAT_ASTC_10x10_SRGB,
+   "PIPE_FORMAT_ASTC_10x10_SRGB",
+   "astc_10x10_srgb",
+   {10, 10, 128},	/* block */
+   UTIL_FORMAT_LAYOUT_ASTC,
+   1,	/* nr_channels */
+   FALSE,	/* is_array */
+   FALSE,	/* is_bitmask */
+   FALSE,	/* is_mixed */
+   {
+      {UTIL_FORMAT_TYPE_VOID, FALSE, FALSE, 128, 0},	/* x = x */
+      {0, 0, 0, 0, 0},
+      {0, 0, 0, 0, 0},
+      {0, 0, 0, 0, 0}
+   },
+   {
+      UTIL_FORMAT_SWIZZLE_X,	/* sr */
+      UTIL_FORMAT_SWIZZLE_Y,	/* sg */
+      UTIL_FORMAT_SWIZZLE_Z,	/* sb */
+      UTIL_FORMAT_SWIZZLE_W	/* a */
+   },
+   UTIL_FORMAT_COLORSPACE_SRGB,
+};
+
+const struct util_format_description
+util_format_astc_12x10_srgb_description = {
+   PIPE_FORMAT_ASTC_12x10_SRGB,
+   "PIPE_FORMAT_ASTC_12x10_SRGB",
+   "astc_12x10_srgb",
+   {12, 10, 128},	/* block */
+   UTIL_FORMAT_LAYOUT_ASTC,
+   1,	/* nr_channels */
+   FALSE,	/* is_array */
+   FALSE,	/* is_bitmask */
+   FALSE,	/* is_mixed */
+   {
+      {UTIL_FORMAT_TYPE_VOID, FALSE, FALSE, 128, 0},	/* x = x */
+      {0, 0, 0, 0, 0},
+      {0, 0, 0, 0, 0},
+      {0, 0, 0, 0, 0}
+   },
+   {
+      UTIL_FORMAT_SWIZZLE_X,	/* sr */
+      UTIL_FORMAT_SWIZZLE_Y,	/* sg */
+      UTIL_FORMAT_SWIZZLE_Z,	/* sb */
+      UTIL_FORMAT_SWIZZLE_W	/* a */
+   },
+   UTIL_FORMAT_COLORSPACE_SRGB,
+};
+
+const struct util_format_description
+util_format_astc_12x12_srgb_description = {
+   PIPE_FORMAT_ASTC_12x12_SRGB,
+   "PIPE_FORMAT_ASTC_12x12_SRGB",
+   "astc_12x12_srgb",
+   {12, 12, 128},	/* block */
+   UTIL_FORMAT_LAYOUT_ASTC,
+   1,	/* nr_channels */
+   FALSE,	/* is_array */
+   FALSE,	/* is_bitmask */
+   FALSE,	/* is_mixed */
+   {
+      {UTIL_FORMAT_TYPE_VOID, FALSE, FALSE, 128, 0},	/* x = x */
+      {0, 0, 0, 0, 0},
+      {0, 0, 0, 0, 0},
+      {0, 0, 0, 0, 0}
+   },
+   {
+      UTIL_FORMAT_SWIZZLE_X,	/* sr */
+      UTIL_FORMAT_SWIZZLE_Y,	/* sg */
+      UTIL_FORMAT_SWIZZLE_Z,	/* sb */
+      UTIL_FORMAT_SWIZZLE_W	/* a */
+   },
+   UTIL_FORMAT_COLORSPACE_SRGB,
+};
+
 const struct util_format_description *
 util_format_description(enum pipe_format format)
 {
@@ -10846,6 +11574,62 @@ util_format_description(enum pipe_format format)
       return &util_format_etc2_rg11_unorm_description;
    case PIPE_FORMAT_ETC2_RG11_SNORM:
       return &util_format_etc2_rg11_snorm_description;
+   case PIPE_FORMAT_ASTC_4x4:
+      return &util_format_astc_4x4_description;
+   case PIPE_FORMAT_ASTC_5x4:
+      return &util_format_astc_5x4_description;
+   case PIPE_FORMAT_ASTC_5x5:
+      return &util_format_astc_5x5_description;
+   case PIPE_FORMAT_ASTC_6x5:
+      return &util_format_astc_6x5_description;
+   case PIPE_FORMAT_ASTC_6x6:
+      return &util_format_astc_6x6_description;
+   case PIPE_FORMAT_ASTC_8x5:
+      return &util_format_astc_8x5_description;
+   case PIPE_FORMAT_ASTC_8x6:
+      return &util_format_astc_8x6_description;
+   case PIPE_FORMAT_ASTC_8x8:
+      return &util_format_astc_8x8_description;
+   case PIPE_FORMAT_ASTC_10x5:
+      return &util_format_astc_10x5_description;
+   case PIPE_FORMAT_ASTC_10x6:
+      return &util_format_astc_10x6_description;
+   case PIPE_FORMAT_ASTC_10x8:
+      return &util_format_astc_10x8_description;
+   case PIPE_FORMAT_ASTC_10x10:
+      return &util_format_astc_10x10_description;
+   case PIPE_FORMAT_ASTC_12x10:
+      return &util_format_astc_12x10_description;
+   case PIPE_FORMAT_ASTC_12x12:
+      return &util_format_astc_12x12_description;
+   case PIPE_FORMAT_ASTC_4x4_SRGB:
+      return &util_format_astc_4x4_srgb_description;
+   case PIPE_FORMAT_ASTC_5x4_SRGB:
+      return &util_format_astc_5x4_srgb_description;
+   case PIPE_FORMAT_ASTC_5x5_SRGB:
+      return &util_format_astc_5x5_srgb_description;
+   case PIPE_FORMAT_ASTC_6x5_SRGB:
+      return &util_format_astc_6x5_srgb_description;
+   case PIPE_FORMAT_ASTC_6x6_SRGB:
+      return &util_format_astc_6x6_srgb_description;
+   case PIPE_FORMAT_ASTC_8x5_SRGB:
+      return &util_format_astc_8x5_srgb_description;
+   case PIPE_FORMAT_ASTC_8x6_SRGB:
+      return &util_format_astc_8x6_srgb_description;
+   case PIPE_FORMAT_ASTC_8x8_SRGB:
+      return &util_format_astc_8x8_srgb_description;
+   case PIPE_FORMAT_ASTC_10x5_SRGB:
+      return &util_format_astc_10x5_srgb_description;
+   case PIPE_FORMAT_ASTC_10x6_SRGB:
+      return &util_format_astc_10x6_srgb_description;
+   case PIPE_FORMAT_ASTC_10x8_SRGB:
+      return &util_format_astc_10x8_srgb_description;
+   case PIPE_FORMAT_ASTC_10x10_SRGB:
+      return &util_format_astc_10x10_srgb_description;
+   case PIPE_FORMAT_ASTC_12x10_SRGB:
+      return &util_format_astc_12x10_srgb_description;
+   case PIPE_FORMAT_ASTC_12x12_SRGB:
+      return &util_format_astc_12x12_srgb_description;
    default:
       return NULL;
    }

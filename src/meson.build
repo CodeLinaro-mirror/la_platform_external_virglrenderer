@@ -33,6 +33,9 @@ virgl_sources = [
    'virgl_resource.h',
    'virgl_util.c',
    'virgl_util.h',
+]
+
+vrend_sources = [
    'vrend_blitter.c',
    'vrend_blitter.h',
    'vrend_debug.c',
@@ -49,6 +52,8 @@ virgl_sources = [
    'vrend_strbuf.h',
    'vrend_tweaks.c',
    'vrend_tweaks.h',
+   'vrend_winsys.c',
+   'vrend_winsys.h',
 ]
 
 virglrenderer_sources = [
@@ -57,17 +62,16 @@ virglrenderer_sources = [
    'virglrenderer_hw.h',
 ]
 
-
-virgl_egl_sources = [
-   'virgl_gbm.c',
-   'virgl_gbm.h',
-   'virgl_egl_context.c',
-   'virgl_egl.h',
+vrend_winsys_egl_sources = [
+   'vrend_winsys_gbm.c',
+   'vrend_winsys_gbm.h',
+   'vrend_winsys_egl.c',
+   'vrend_winsys_egl.h',
 ]
 
-virgl_glx_sources = [
-   'virgl_glx_context.c',
-   'virgl_glx.h',
+vrend_winsys_glx_sources = [
+   'vrend_winsys_glx.c',
+   'vrend_winsys_glx.h',
 ]
 
 virgl_depends = [
@@ -75,16 +79,26 @@ virgl_depends = [
    epoxy_dep,
    libdrm_dep,
    thread_dep,
-   m_dep
+   m_dep,
 ]
 
+if with_tracing == 'perfetto'
+   virgl_depends += [vperfetto_min_dep]
+endif
+
+if with_tracing == 'percetto'
+   virgl_depends += [percetto_dep]
+endif
+
+virgl_sources += vrend_sources
+
 if have_egl
-   virgl_sources += virgl_egl_sources
+   virgl_sources += vrend_winsys_egl_sources
    virgl_depends += [gbm_dep]
 endif
 
 if have_glx
-   virgl_sources += virgl_glx_sources
+   virgl_sources += vrend_winsys_glx_sources
    virgl_depends += [glx_dep]
 endif
 

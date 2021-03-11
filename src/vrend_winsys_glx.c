@@ -29,7 +29,7 @@
 
 #include <epoxy/glx.h>
 #include "virglrenderer.h"
-#include "virgl_glx.h"
+#include "vrend_winsys_glx.h"
 
 struct virgl_glx {
    Display *display;
@@ -101,4 +101,16 @@ void virgl_glx_destroy_context(struct virgl_glx *d, virgl_renderer_gl_context vi
 int virgl_glx_make_context_current(struct virgl_glx *d, virgl_renderer_gl_context virglctx)
 {
    return glXMakeContextCurrent(d->display, d->pbuffer, d->pbuffer, virglctx);
+}
+
+uint32_t virgl_glx_query_video_memory(struct virgl_glx *d)
+{
+   uint32_t video_memory = 0;
+   if (d) {
+      if (epoxy_has_glx_extension(d->display, DefaultScreen(d->display), "GLX_MESA_query_renderer")) {
+         glXQueryCurrentRendererIntegerMESA(GLX_RENDERER_VIDEO_MEMORY_MESA, &video_memory);
+      }
+   }
+
+   return video_memory;
 }

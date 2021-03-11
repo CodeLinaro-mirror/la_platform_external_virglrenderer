@@ -58,3 +58,11 @@ option(
   value : 'false',
   description : 'enable running unit tests with valgrind'
 )
+
+option(
+  'tracing',
+  type : 'combo',
+  value : 'none',
+  choices : [ 'percetto', 'perfetto', 'stderr', 'none' ],
+  description : 'enable emitting traces using the selected backend'
+)

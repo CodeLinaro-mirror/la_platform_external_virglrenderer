@@ -47,6 +47,7 @@ void vtest_cleanup_renderer(void);
 
 int vtest_create_context(struct vtest_input *input, int out_fd,
                          uint32_t length_dw, struct vtest_context **out_ctx);
+int vtest_lazy_init_context(struct vtest_context *ctx);
 void vtest_destroy_context(struct vtest_context *ctx);
 
 void vtest_set_current_context(struct vtest_context *ctx);
@@ -76,6 +77,11 @@ int vtest_poll(void);
 
 int vtest_ping_protocol_version(uint32_t length_dw);
 int vtest_protocol_version(uint32_t length_dw);
+
+/* since protocol version 3 */
+int vtest_get_param(uint32_t length_dw);
+int vtest_get_capset(uint32_t length_dw);
+int vtest_context_init(uint32_t length_dw);
 
 void vtest_set_max_length(uint32_t length);
 
