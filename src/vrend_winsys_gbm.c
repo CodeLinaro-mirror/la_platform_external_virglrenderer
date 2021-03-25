@@ -38,7 +38,8 @@
 #include "util/u_memory.h"
 #include "pipe/p_state.h"
 
-#include "virgl_gbm.h"
+#include "vrend_winsys.h"
+#include "vrend_winsys_gbm.h"
 #include "virgl_hw.h"
 #include "vrend_debug.h"
 
@@ -75,6 +76,13 @@ static const struct planar_layout packed_4bpp_layout = {
     .bytes_per_pixel = { 4 }
 };
 
+static const struct planar_layout packed_8bpp_layout = {
+    .num_planes = 1,
+    .horizontal_subsampling = { 1 },
+    .vertical_subsampling = { 1 },
+    .bytes_per_pixel = { 8 }
+};
+
 static const struct planar_layout biplanar_yuv_420_layout = {
     .num_planes = 2,
     .horizontal_subsampling = { 1, 2 },
@@ -93,6 +101,7 @@ static const struct format_conversion conversions[] = {
     { GBM_FORMAT_RGB565, VIRGL_FORMAT_B5G6R5_UNORM },
     { GBM_FORMAT_ARGB8888, VIRGL_FORMAT_B8G8R8A8_UNORM },
     { GBM_FORMAT_XRGB8888, VIRGL_FORMAT_B8G8R8X8_UNORM },
+    { GBM_FORMAT_ABGR16161616F, VIRGL_FORMAT_R16G16B16A16_FLOAT },
     { GBM_FORMAT_NV12, VIRGL_FORMAT_NV12 },
     { GBM_FORMAT_ABGR8888, VIRGL_FORMAT_R8G8B8A8_UNORM},
     { GBM_FORMAT_XBGR8888, VIRGL_FORMAT_R8G8B8X8_UNORM},
@@ -178,6 +187,8 @@ static const struct planar_layout *layout_from_format(uint32_t format)
    case GBM_FORMAT_ABGR8888:
    case GBM_FORMAT_XBGR8888:
       return &packed_4bpp_layout;
+   case GBM_FORMAT_ABGR16161616F:
+      return &packed_8bpp_layout;
    default:
       return NULL;
    }
@@ -326,7 +337,13 @@ int virgl_gbm_transfer(struct gbm_bo *bo, uint32_t direction, const struct iovec
    host_map_stride0 = 0;
    uint32_t map_flags = (direction == VIRGL_TRANSFER_TO_HOST) ? GBM_BO_TRANSFER_WRITE :
                                                                 GBM_BO_TRANSFER_READ;
-   void *addr = gbm_bo_map2(bo, 0, 0, width, height, map_flags, &host_map_stride0, &map_data, 0);
+   /* XXX remove this and map just the region when single plane and GBM honors the region */
+   if (direction == VIRGL_TRANSFER_TO_HOST &&
+       !(info->box->x == 0 && info->box->y == 0 &&
+         info->box->width == width && info->box->height == height))
+      map_flags |= GBM_BO_TRANSFER_READ;
+
+   void *addr = gbm_bo_map(bo, 0, 0, width, height, map_flags, &host_map_stride0, &map_data);
    if (!addr)
       return -1;
 
@@ -445,7 +462,7 @@ int virgl_gbm_export_query(struct gbm_bo *bo, struct virgl_renderer_export_query
 
    query->out_num_fds = 0;
    query->out_fourcc = 0;
-   query->out_modifier = 0;
+   query->out_modifier = DRM_FORMAT_MOD_INVALID;
    for (int plane = 0; plane < VIRGL_GBM_MAX_PLANES; plane++) {
       query->out_fds[plane] = -1;
       query->out_strides[plane] = 0;

@@ -28,6 +28,14 @@
 #include <stdint.h>
 #include <stdbool.h>
 
+#ifdef HAVE_CONFIG_H
+#include "config.h"
+#endif
+
+#define TRACE_WITH_PERFETTO 1
+#define TRACE_WITH_STDERR 2
+#define TRACE_WITH_PERCETTO 3
+
 #define BIT(n)                   (UINT32_C(1) << (n))
 
 static inline bool has_bit(uint32_t mask, uint32_t bit)
@@ -48,5 +56,50 @@ static inline bool is_only_bit(uint32_t mask, uint32_t bit)
 unsigned hash_func_u32(void *key);
 
 int compare_func(void *key1, void *key2);
+
+bool has_eventfd(void);
+int create_eventfd(unsigned int initval);
+int write_eventfd(int fd, uint64_t val);
+void flush_eventfd(int fd);
+
+#ifdef ENABLE_TRACING
+void trace_init(void);
+
+#define TRACE_INIT() trace_init()
+#define TRACE_FUNC() TRACE_SCOPE(__func__)
+
+#if ENABLE_TRACING == TRACE_WITH_PERCETTO
+
+#include <percetto.h>
+
+#define VIRGL_PERCETTO_CATEGORIES(C, G) \
+  C(virgl, "virglrenderer") \
+  C(virgls, "virglrenderer detailed events", "slow")
+
+PERCETTO_CATEGORY_DECLARE(VIRGL_PERCETTO_CATEGORIES)
+
+#define TRACE_SCOPE(SCOPE) TRACE_EVENT(virgl, SCOPE)
+/* Trace high frequency events (tracing may impact performance). */
+#define TRACE_SCOPE_SLOW(SCOPE) TRACE_EVENT(virgls, SCOPE)
+
+#else
+
+const char *trace_begin(const char *scope);
+void trace_end(const char **scope);
+
+#define TRACE_SCOPE(SCOPE) \
+   const char *trace_dummy __attribute__((cleanup (trace_end), unused)) = \
+   trace_begin(SCOPE)
+
+#define TRACE_SCOPE_SLOW(SCOPE) TRACE_SCOPE(SCOPE)
+
+#endif /* ENABLE_TRACING == TRACE_WITH_PERCETTO */
+
+#else
+#define TRACE_INIT()
+#define TRACE_FUNC()
+#define TRACE_SCOPE(SCOPE)
+#define TRACE_SCOPE_SLOW(SCOPE)
+#endif /* ENABLE_TRACING */
 
 #endif /* VIRGL_UTIL_H */

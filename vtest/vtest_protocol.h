@@ -64,6 +64,13 @@
 #define VCMD_TRANSFER_GET2 13
 #define VCMD_TRANSFER_PUT2 14
 
+#ifdef VIRGL_RENDERER_UNSTABLE_APIS
+/* since protocol version 3 */
+#define VCMD_GET_PARAM 15
+#define VCMD_GET_CAPSET 16
+#define VCMD_CONTEXT_INIT 17
+#endif /* VIRGL_RENDERER_UNSTABLE_APIS */
+
 #define VCMD_RES_CREATE_SIZE 10
 #define VCMD_RES_CREATE_RES_HANDLE 0
 #define VCMD_RES_CREATE_TARGET 1
@@ -128,4 +135,20 @@
 #define VCMD_PROTOCOL_VERSION_SIZE 1
 #define VCMD_PROTOCOL_VERSION_VERSION 0
 
-#endif
+#ifdef VIRGL_RENDERER_UNSTABLE_APIS
+
+#define VCMD_GET_PARAM_SIZE 1
+#define VCMD_GET_PARAM_PARAM 0
+/* resp param validity and value */
+
+#define VCMD_GET_CAPSET_SIZE 2
+#define VCMD_GET_CAPSET_ID 0
+#define VCMD_GET_CAPSET_VERSION 1
+/* resp capset validity and contents */
+
+#define VCMD_CONTEXT_INIT_SIZE 1
+#define VCMD_CONTEXT_INIT_CAPSET_ID 0
+
+#endif /* VIRGL_RENDERER_UNSTABLE_APIS */
+
+#endif /* VTEST_PROTOCOL */

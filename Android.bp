@@ -105,8 +105,6 @@ cc_library {
         "src/gallium/auxiliary/util/u_surface.c",
         "src/iov.c",
         "src/virgl_context.c",
-        "src/virgl_egl_context.c",
-        "src/virgl_gbm.c",
         "src/virglrenderer.c",
         "src/virgl_resource.c",
         "src/virgl_util.c",
@@ -118,6 +116,9 @@ cc_library {
         "src/vrend_renderer.c",
         "src/vrend_shader.c",
         "src/vrend_tweaks.c",
+        "src/vrend_winsys.c",
+        "src/vrend_winsys_egl.c",
+        "src/vrend_winsys_gbm.c",
     ],
     target: {
         linux_glibc: {
