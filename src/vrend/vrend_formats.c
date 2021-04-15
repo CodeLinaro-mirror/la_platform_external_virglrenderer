@@ -1,4 +1,4 @@
-﻿/**************************************************************************
+/**************************************************************************
  *
  * Copyright (C) 2014 Red Hat Inc.
  *
@@ -367,6 +367,7 @@ static struct vrend_format_table gles_bgra_formats[] = {
 static bool color_format_can_readback(struct vrend_format_table *virgl_format, int gles_ver)
 {
    GLint imp = 0;
+   GLenum status = GL_NO_ERROR;
 
    if (virgl_format->format == VIRGL_FORMAT_R8G8B8A8_UNORM)
       return true;
@@ -391,7 +392,10 @@ static bool color_format_can_readback(struct vrend_format_table *virgl_format, i
 
    /* Check implementation specific readback formats */
    glGetIntegerv(GL_IMPLEMENTATION_COLOR_READ_TYPE, &imp);
-   if (imp == (GLint)virgl_format->gltype) {
+   /* GLES can throw errors for certain combinations which are ok for normal GL,
+      so catch them here */
+   status = glGetError();
+   if (status == GL_NO_ERROR && imp == (GLint)virgl_format->gltype) {
       glGetIntegerv(GL_IMPLEMENTATION_COLOR_READ_FORMAT, &imp);
       if (imp == (GLint)virgl_format->glformat)
          return true;
