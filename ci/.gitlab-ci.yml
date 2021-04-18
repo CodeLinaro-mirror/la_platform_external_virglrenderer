@@ -1,5 +1,5 @@
 variables:
-  FDO_DISTRIBUTION_TAG: "2020-03-30"
+  FDO_DISTRIBUTION_TAG: "2021-02-04"
   FDO_DISTRIBUTION_VERSION: buster
   FDO_UPSTREAM_REPO: "virgl/virglrenderer"
   TEST_IMAGE: "$CI_REGISTRY_IMAGE/debian/$FDO_DISTRIBUTION_VERSION:$FDO_DISTRIBUTION_TAG"
@@ -57,6 +57,11 @@ mesa check meson:
 make check clang-fuzzer:
   variables:
     TEST_SUITE: '--make-check-clang-fuzzer'
+  extends: .make_check_base
+
+make check trace-stderr:
+  variables:
+    TEST_SUITE: '--make-check-trace-stderr'
   extends: .make_check_base
 
 .tests:

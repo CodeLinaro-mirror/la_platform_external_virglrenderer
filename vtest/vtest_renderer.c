@@ -61,7 +61,11 @@ struct vtest_context {
    struct vtest_input *input;
    int out_fd;
 
+   char *debug_name;
+
    unsigned protocol_version;
+   unsigned capset_id;
+   bool context_initialized;
 
    struct util_hash_table *resource_table;
 };
@@ -278,9 +282,7 @@ void vtest_cleanup_renderer(void)
       struct vtest_context *ctx, *tmp;
 
       LIST_FOR_EACH_ENTRY_SAFE(ctx, tmp, &renderer.active_contexts, head) {
-         virgl_renderer_context_destroy(ctx->ctx_id);
-         util_hash_table_clear(ctx->resource_table);
-         vtest_free_context(ctx, true);
+         vtest_destroy_context(ctx);
       }
       LIST_FOR_EACH_ENTRY_SAFE(ctx, tmp, &renderer.free_contexts, head) {
          vtest_free_context(ctx, true);
@@ -323,8 +325,11 @@ static struct vtest_context *vtest_new_context(struct vtest_input *input,
    ctx->input = input;
    ctx->out_fd = out_fd;
 
+   ctx->debug_name = NULL;
    /* By default we support version 0 unless VCMD_PROTOCOL_VERSION is sent */
    ctx->protocol_version = 0;
+   ctx->capset_id = 0;
+   ctx->context_initialized = false;
 
    return ctx;
 }
@@ -358,26 +363,46 @@ int vtest_create_context(struct vtest_input *input, int out_fd,
    vtestname = calloc(1, length + 1);
    if (!vtestname) {
       ret = -1;
-      goto end;
+      goto err;
    }
 
    ret = ctx->input->read(ctx->input, vtestname, length);
    if (ret != (int)length) {
       ret = -1;
-      goto end;
+      goto err;
    }
 
-   ret = virgl_renderer_context_create(ctx->ctx_id, strlen(vtestname), vtestname);
+   ctx->debug_name = vtestname;
 
-end:
+   list_addtail(&ctx->head, &renderer.active_contexts);
+   *out_ctx = ctx;
+
+   return 0;
+
+err:
    free(vtestname);
+   vtest_free_context(ctx, false);
+   return ret;
+}
 
-   if (ret) {
-      vtest_free_context(ctx, false);
+int vtest_lazy_init_context(struct vtest_context *ctx)
+{
+   int ret;
+
+   if (ctx->context_initialized)
+      return 0;
+
+   if (ctx->capset_id) {
+      ret = virgl_renderer_context_create_with_flags(ctx->ctx_id,
+                                                     ctx->capset_id,
+                                                     strlen(ctx->debug_name),
+                                                     ctx->debug_name);
    } else {
-      list_addtail(&ctx->head, &renderer.active_contexts);
-      *out_ctx = ctx;
+      ret = virgl_renderer_context_create(ctx->ctx_id,
+                                          strlen(ctx->debug_name),
+                                          ctx->debug_name);
    }
+   ctx->context_initialized = (ret == 0);
 
    return ret;
 }
@@ -389,7 +414,9 @@ void vtest_destroy_context(struct vtest_context *ctx)
    }
    list_del(&ctx->head);
 
-   virgl_renderer_context_destroy(ctx->ctx_id);
+   free(ctx->debug_name);
+   if (ctx->context_initialized)
+      virgl_renderer_context_destroy(ctx->ctx_id);
    util_hash_table_clear(ctx->resource_table);
    vtest_free_context(ctx, false);
 }
@@ -469,6 +496,111 @@ int vtest_protocol_version(UNUSED uint32_t length_dw)
    }
 
    return 0;
+}
+
+int vtest_get_param(UNUSED uint32_t length_dw)
+{
+   struct vtest_context *ctx = vtest_get_current_context();
+   uint32_t get_param_buf[VCMD_GET_PARAM_SIZE];
+   uint32_t resp_buf[VTEST_HDR_SIZE + 2];
+   uint32_t param;
+   uint32_t *resp;
+   int ret;
+
+   ret = ctx->input->read(ctx->input, get_param_buf, sizeof(get_param_buf));
+   if (ret != sizeof(get_param_buf))
+      return -1;
+
+   param = get_param_buf[VCMD_GET_PARAM_PARAM];
+
+   resp_buf[VTEST_CMD_LEN] = 2;
+   resp_buf[VTEST_CMD_ID] = VCMD_GET_PARAM;
+   resp = &resp_buf[VTEST_CMD_DATA_START];
+   switch (param) {
+   default:
+      resp[0] = false;
+      resp[1] = 0;
+      break;
+   }
+
+   ret = vtest_block_write(ctx->out_fd, resp_buf, sizeof(resp_buf));
+   if (ret < 0)
+      return -1;
+
+   return 0;
+}
+
+int vtest_get_capset(UNUSED uint32_t length_dw)
+{
+   struct vtest_context *ctx = vtest_get_current_context();
+   uint32_t get_capset_buf[VCMD_GET_CAPSET_SIZE];
+   uint32_t resp_buf[VTEST_HDR_SIZE + 1];
+   uint32_t id;
+   uint32_t version;
+   uint32_t max_version;
+   uint32_t max_size;
+   void *caps;
+   int ret;
+
+   ret = ctx->input->read(ctx->input, get_capset_buf, sizeof(get_capset_buf));
+   if (ret != sizeof(get_capset_buf))
+      return -1;
+
+   id = get_capset_buf[VCMD_GET_CAPSET_ID];
+   version = get_capset_buf[VCMD_GET_CAPSET_VERSION];
+
+   virgl_renderer_get_cap_set(id, &max_version, &max_size);
+
+   /* unsupported id or version */
+   if ((!max_version && !max_size) || version > max_version) {
+      resp_buf[VTEST_CMD_LEN] = 1;
+      resp_buf[VTEST_CMD_ID] = VCMD_GET_CAPSET;
+      resp_buf[VTEST_CMD_DATA_START] = false;
+      return vtest_block_write(ctx->out_fd, resp_buf, sizeof(resp_buf));
+   }
+
+   if (max_size % 4)
+      return -EINVAL;
+
+   caps = malloc(max_size);
+   if (!caps)
+      return -ENOMEM;
+
+   virgl_renderer_fill_caps(id, version, caps);
+
+   resp_buf[VTEST_CMD_LEN] = 1 + max_size / 4;
+   resp_buf[VTEST_CMD_ID] = VCMD_GET_CAPSET;
+   resp_buf[VTEST_CMD_DATA_START] = true;
+   ret = vtest_block_write(ctx->out_fd, resp_buf, sizeof(resp_buf));
+   if (ret >= 0)
+      ret = vtest_block_write(ctx->out_fd, caps, max_size);
+
+   free(caps);
+   return ret >= 0 ? 0 : ret;
+}
+
+int vtest_context_init(UNUSED uint32_t length_dw)
+{
+   struct vtest_context *ctx = vtest_get_current_context();
+   uint32_t context_init_buf[VCMD_CONTEXT_INIT_SIZE];
+   uint32_t capset_id;
+   int ret;
+
+   ret = ctx->input->read(ctx->input, context_init_buf, sizeof(context_init_buf));
+   if (ret != sizeof(context_init_buf))
+      return -1;
+
+   capset_id = context_init_buf[VCMD_CONTEXT_INIT_CAPSET_ID];
+   if (!capset_id)
+      return -EINVAL;
+
+   if (ctx->context_initialized) {
+      return ctx->capset_id == capset_id ? 0 : -EINVAL;
+   }
+
+   ctx->capset_id = capset_id;
+
+   return vtest_lazy_init_context(ctx);
 }
 
 int vtest_send_caps2(UNUSED uint32_t length_dw)
@@ -1053,6 +1185,14 @@ int vtest_resource_busy_wait(UNUSED uint32_t length_dw)
    if (ret != sizeof(bw_buf)) {
       return -1;
    }
+
+   /* clients often send VCMD_PING_PROTOCOL_VERSION followed by
+    * VCMD_RESOURCE_BUSY_WAIT with handle 0 to figure out if
+    * VCMD_PING_PROTOCOL_VERSION is supported.  We need to make a special case
+    * for that.
+    */
+   if (!ctx->context_initialized && bw_buf[VCMD_BUSY_WAIT_HANDLE])
+      return -1;
 
    /*  handle = bw_buf[VCMD_BUSY_WAIT_HANDLE]; unused as of now */
    flags = bw_buf[VCMD_BUSY_WAIT_FLAGS];
