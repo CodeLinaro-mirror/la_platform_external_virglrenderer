@@ -424,7 +424,7 @@ static inline bool has_feature(enum features_id feature_id)
    VREND_DEBUG(dbg_feature_use, NULL, "Try using feature %s:%d\n",
                feature_list[feature_id].log_name,
                retval);
-   return retval;
+   return (feature_id != feat_dual_src_blend) && retval;
 }
 
 
