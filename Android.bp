@@ -76,6 +76,7 @@ cc_library {
         "src/gallium/auxiliary",
         "src/gallium/auxiliary/util",
         "src/gallium/include",
+        "src/venus",
     ],
     srcs: [
         "prebuilt-intermediates/src/u_format_table.c",
