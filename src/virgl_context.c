@@ -26,7 +26,7 @@
 
 #include <errno.h>
 
-#include "os/os_misc.h"
+#include "util/os_misc.h"
 #include "util/u_hash_table.h"
 #include "util/u_pointer.h"
 #include "virgl_util.h"
@@ -53,6 +53,7 @@ void
 virgl_context_table_cleanup(void)
 {
    util_hash_table_destroy(virgl_context_table);
+   virgl_context_table = NULL;
 }
 
 void
