@@ -485,17 +485,6 @@ vn_replace_VkSamplerYcbcrConversionInfo_handle(VkSamplerYcbcrConversionInfo *val
 /* struct VkViewport */
 
 static inline void
-vn_encode_VkViewport(struct vn_cs_encoder *enc, const VkViewport *val)
-{
-    vn_encode_float(enc, &val->x);
-    vn_encode_float(enc, &val->y);
-    vn_encode_float(enc, &val->width);
-    vn_encode_float(enc, &val->height);
-    vn_encode_float(enc, &val->minDepth);
-    vn_encode_float(enc, &val->maxDepth);
-}
-
-static inline void
 vn_decode_VkViewport_temp(struct vn_cs_decoder *dec, VkViewport *val)
 {
     vn_decode_float(dec, &val->x);
@@ -605,6 +594,38 @@ vn_replace_VkRect2D_handle(VkRect2D *val)
 {
     vn_replace_VkOffset2D_handle(&val->offset);
     vn_replace_VkExtent2D_handle(&val->extent);
+}
+
+/* union VkClearColorValue */
+
+static inline void
+vn_decode_VkClearColorValue_temp(struct vn_cs_decoder *dec, VkClearColorValue *val)
+{
+    uint32_t tag;
+    vn_decode_uint32_t(dec, &tag);
+    switch (tag) {
+    case 0:
+        {
+        const size_t array_size = vn_decode_array_size(dec, 4);
+        vn_decode_float_array(dec, val->float32, array_size);
+    }
+        break;
+    case 1:
+        {
+        const size_t array_size = vn_decode_array_size(dec, 4);
+        vn_decode_int32_t_array(dec, val->int32, array_size);
+    }
+        break;
+    case 2:
+        {
+        const size_t array_size = vn_decode_array_size(dec, 4);
+        vn_decode_uint32_t_array(dec, val->uint32, array_size);
+    }
+        break;
+    default:
+        vn_cs_decoder_set_fatal(dec);
+        break;
+    }
 }
 
 /* struct VkMemoryDedicatedRequirements chain */
@@ -751,6 +772,69 @@ vn_decode_VkMemoryRequirements2_partial_temp(struct vn_cs_decoder *dec, VkMemory
     val->sType = stype;
     val->pNext = vn_decode_VkMemoryRequirements2_pnext_partial_temp(dec);
     vn_decode_VkMemoryRequirements2_self_partial_temp(dec, val);
+}
+
+/* struct VkMemoryBarrier2 chain */
+
+static inline void *
+vn_decode_VkMemoryBarrier2_pnext_temp(struct vn_cs_decoder *dec)
+{
+    /* no known/supported struct */
+    if (vn_decode_simple_pointer(dec))
+        vn_cs_decoder_set_fatal(dec);
+    return NULL;
+}
+
+static inline void
+vn_decode_VkMemoryBarrier2_self_temp(struct vn_cs_decoder *dec, VkMemoryBarrier2 *val)
+{
+    /* skip val->{sType,pNext} */
+    vn_decode_VkFlags64(dec, &val->srcStageMask);
+    vn_decode_VkFlags64(dec, &val->srcAccessMask);
+    vn_decode_VkFlags64(dec, &val->dstStageMask);
+    vn_decode_VkFlags64(dec, &val->dstAccessMask);
+}
+
+static inline void
+vn_decode_VkMemoryBarrier2_temp(struct vn_cs_decoder *dec, VkMemoryBarrier2 *val)
+{
+    VkStructureType stype;
+    vn_decode_VkStructureType(dec, &stype);
+    if (stype != VK_STRUCTURE_TYPE_MEMORY_BARRIER_2)
+        vn_cs_decoder_set_fatal(dec);
+
+    val->sType = stype;
+    val->pNext = vn_decode_VkMemoryBarrier2_pnext_temp(dec);
+    vn_decode_VkMemoryBarrier2_self_temp(dec, val);
+}
+
+static inline void
+vn_replace_VkMemoryBarrier2_handle_self(VkMemoryBarrier2 *val)
+{
+    /* skip val->sType */
+    /* skip val->pNext */
+    /* skip val->srcStageMask */
+    /* skip val->srcAccessMask */
+    /* skip val->dstStageMask */
+    /* skip val->dstAccessMask */
+}
+
+static inline void
+vn_replace_VkMemoryBarrier2_handle(VkMemoryBarrier2 *val)
+{
+    struct VkBaseOutStructure *pnext = (struct VkBaseOutStructure *)val;
+
+    do {
+        switch ((int32_t)pnext->sType) {
+        case VK_STRUCTURE_TYPE_MEMORY_BARRIER_2:
+            vn_replace_VkMemoryBarrier2_handle_self((VkMemoryBarrier2 *)pnext);
+            break;
+        default:
+            /* ignore unknown/unsupported struct */
+            break;
+        }
+        pnext = pnext->pNext;
+    } while (pnext);
 }
 
 #pragma GCC diagnostic pop

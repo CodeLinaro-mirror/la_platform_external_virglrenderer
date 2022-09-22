@@ -31,6 +31,7 @@
 #define NO_SWIZZLE { SWIZZLE_INVALID, SWIZZLE_INVALID, SWIZZLE_INVALID, SWIZZLE_INVALID }
 #define RRR1_SWIZZLE { PIPE_SWIZZLE_RED, PIPE_SWIZZLE_RED, PIPE_SWIZZLE_RED, PIPE_SWIZZLE_ONE }
 #define RGB1_SWIZZLE { PIPE_SWIZZLE_RED, PIPE_SWIZZLE_GREEN, PIPE_SWIZZLE_BLUE, PIPE_SWIZZLE_ONE }
+#define OOOR_SWIZZLE { PIPE_SWIZZLE_ZERO, PIPE_SWIZZLE_ZERO, PIPE_SWIZZLE_ZERO, PIPE_SWIZZLE_RED  }
 
 #define BGR1_SWIZZLE { PIPE_SWIZZLE_BLUE, PIPE_SWIZZLE_GREEN, PIPE_SWIZZLE_RED, PIPE_SWIZZLE_ONE }
 #define BGRA_SWIZZLE { PIPE_SWIZZLE_BLUE, PIPE_SWIZZLE_GREEN, PIPE_SWIZZLE_RED, PIPE_SWIZZLE_ALPHA }
@@ -131,11 +132,11 @@ static struct vrend_format_table float_base_formats[] = {
 };
 
 static struct vrend_format_table float_la_formats[] = {
-  { VIRGL_FORMAT_A16_FLOAT, GL_ALPHA16F_ARB, GL_ALPHA, GL_HALF_FLOAT, NO_SWIZZLE },
+  { VIRGL_FORMAT_A16_FLOAT, GL_R16F, GL_RED, GL_HALF_FLOAT, OOOR_SWIZZLE },
   { VIRGL_FORMAT_L16_FLOAT, GL_R16F, GL_RED, GL_HALF_FLOAT, RRR1_SWIZZLE },
   { VIRGL_FORMAT_L16A16_FLOAT, GL_LUMINANCE_ALPHA16F_ARB, GL_LUMINANCE_ALPHA, GL_HALF_FLOAT, NO_SWIZZLE },
 
-  { VIRGL_FORMAT_A32_FLOAT, GL_ALPHA32F_ARB, GL_ALPHA, GL_FLOAT, NO_SWIZZLE },
+  { VIRGL_FORMAT_A32_FLOAT, GL_R32F, GL_RED, GL_FLOAT, OOOR_SWIZZLE },
   { VIRGL_FORMAT_L32_FLOAT, GL_R32F, GL_RED, GL_FLOAT, RRR1_SWIZZLE },
   { VIRGL_FORMAT_L32A32_FLOAT, GL_LUMINANCE_ALPHA32F_ARB, GL_LUMINANCE_ALPHA, GL_FLOAT, NO_SWIZZLE },
 };
@@ -171,26 +172,26 @@ static struct vrend_format_table float_3comp_formats[] = {
 
 
 static struct vrend_format_table integer_la_formats[] = {
-  { VIRGL_FORMAT_A8_UINT, GL_ALPHA8UI_EXT, GL_ALPHA_INTEGER, GL_UNSIGNED_BYTE, NO_SWIZZLE },
+  { VIRGL_FORMAT_A8_UINT, GL_R8UI, GL_RED_INTEGER, GL_UNSIGNED_BYTE, OOOR_SWIZZLE },
   { VIRGL_FORMAT_L8_UINT, GL_R8UI, GL_RED_INTEGER, GL_UNSIGNED_BYTE, RRR1_SWIZZLE },
   { VIRGL_FORMAT_L8A8_UINT, GL_LUMINANCE_ALPHA8UI_EXT, GL_LUMINANCE_ALPHA_INTEGER_EXT, GL_UNSIGNED_BYTE, NO_SWIZZLE },
-  { VIRGL_FORMAT_A8_SINT, GL_ALPHA8I_EXT, GL_ALPHA_INTEGER, GL_BYTE, NO_SWIZZLE },
+  { VIRGL_FORMAT_A8_SINT, GL_R8I, GL_RED_INTEGER, GL_BYTE, OOOR_SWIZZLE },
   { VIRGL_FORMAT_L8_SINT, GL_R8I, GL_RED_INTEGER, GL_BYTE, RRR1_SWIZZLE },
   { VIRGL_FORMAT_L8A8_SINT, GL_LUMINANCE_ALPHA8I_EXT, GL_LUMINANCE_ALPHA_INTEGER_EXT, GL_BYTE, NO_SWIZZLE },
 
-  { VIRGL_FORMAT_A16_UINT, GL_ALPHA16UI_EXT, GL_ALPHA_INTEGER, GL_UNSIGNED_SHORT, NO_SWIZZLE },
+  { VIRGL_FORMAT_A16_UINT, GL_R16UI, GL_RED_INTEGER, GL_UNSIGNED_SHORT, OOOR_SWIZZLE },
   { VIRGL_FORMAT_L16_UINT, GL_R16UI, GL_RED_INTEGER, GL_UNSIGNED_SHORT, RRR1_SWIZZLE },
   { VIRGL_FORMAT_L16A16_UINT, GL_LUMINANCE_ALPHA16UI_EXT, GL_LUMINANCE_ALPHA_INTEGER_EXT, GL_UNSIGNED_SHORT, NO_SWIZZLE },
 
-  { VIRGL_FORMAT_A16_SINT, GL_ALPHA16I_EXT, GL_ALPHA_INTEGER, GL_SHORT, NO_SWIZZLE },
+  { VIRGL_FORMAT_A16_SINT, GL_R16I, GL_RED_INTEGER, GL_SHORT, OOOR_SWIZZLE },
   { VIRGL_FORMAT_L16_SINT, GL_R16I, GL_RED_INTEGER, GL_SHORT, RRR1_SWIZZLE },
   { VIRGL_FORMAT_L16A16_SINT, GL_LUMINANCE_ALPHA16I_EXT, GL_LUMINANCE_ALPHA_INTEGER_EXT, GL_SHORT, NO_SWIZZLE },
 
-  { VIRGL_FORMAT_A32_UINT, GL_ALPHA32UI_EXT, GL_ALPHA_INTEGER, GL_UNSIGNED_INT, NO_SWIZZLE },
+  { VIRGL_FORMAT_A32_UINT, GL_R32UI, GL_RED_INTEGER, GL_UNSIGNED_INT, OOOR_SWIZZLE },
   { VIRGL_FORMAT_L32_UINT, GL_R32UI, GL_RED_INTEGER, GL_UNSIGNED_INT, RRR1_SWIZZLE },
   { VIRGL_FORMAT_L32A32_UINT, GL_LUMINANCE_ALPHA32UI_EXT, GL_LUMINANCE_ALPHA_INTEGER_EXT, GL_UNSIGNED_INT, NO_SWIZZLE },
 
-  { VIRGL_FORMAT_A32_SINT, GL_ALPHA32I_EXT, GL_ALPHA_INTEGER, GL_INT, NO_SWIZZLE },
+  { VIRGL_FORMAT_A32_SINT, GL_R32I, GL_RED_INTEGER, GL_INT, OOOR_SWIZZLE },
   { VIRGL_FORMAT_L32_SINT, GL_R32I, GL_RED_INTEGER, GL_INT, RRR1_SWIZZLE },
   { VIRGL_FORMAT_L32A32_SINT, GL_LUMINANCE_ALPHA32I_EXT, GL_LUMINANCE_ALPHA_INTEGER_EXT, GL_INT, NO_SWIZZLE },
 
@@ -293,12 +294,6 @@ static struct vrend_format_table srgb_formats[] = {
   { VIRGL_FORMAT_R8_SRGB, GL_SR8_EXT, GL_RED, GL_UNSIGNED_BYTE, NO_SWIZZLE },
 };
 
-static struct vrend_format_table gl_srgb_formats[] =
-{
-  { VIRGL_FORMAT_B8G8R8X8_SRGB, GL_SRGB8_ALPHA8, GL_BGRA, GL_UNSIGNED_BYTE, RGB1_SWIZZLE },
-  { VIRGL_FORMAT_B8G8R8A8_SRGB, GL_SRGB8_ALPHA8, GL_BGRA, GL_UNSIGNED_BYTE, NO_SWIZZLE },
-};
-
 static struct vrend_format_table bit10_formats[] = {
   { VIRGL_FORMAT_B10G10R10X2_UNORM, GL_RGB10_A2, GL_BGRA, GL_UNSIGNED_INT_2_10_10_10_REV, RGB1_SWIZZLE },
   { VIRGL_FORMAT_B10G10R10A2_UNORM, GL_RGB10_A2, GL_BGRA, GL_UNSIGNED_INT_2_10_10_10_REV, NO_SWIZZLE },
@@ -326,6 +321,8 @@ static struct vrend_format_table bptc_formats[] = {
 static struct vrend_format_table gl_bgra_formats[] = {
   { VIRGL_FORMAT_B8G8R8X8_UNORM, GL_RGBA8, GL_BGRA, GL_UNSIGNED_BYTE, RGB1_SWIZZLE },
   { VIRGL_FORMAT_B8G8R8A8_UNORM, GL_RGBA8, GL_BGRA, GL_UNSIGNED_BYTE, NO_SWIZZLE },
+  { VIRGL_FORMAT_B8G8R8X8_SRGB, GL_SRGB8_ALPHA8, GL_BGRA, GL_UNSIGNED_BYTE, RGB1_SWIZZLE },
+  { VIRGL_FORMAT_B8G8R8A8_SRGB, GL_SRGB8_ALPHA8, GL_BGRA, GL_UNSIGNED_BYTE, NO_SWIZZLE },
 };
 
 static struct vrend_format_table gles_bgra_formats[] = {
@@ -473,7 +470,13 @@ static void vrend_add_formats(struct vrend_format_table *table, int num_entries)
 
     glTexImage2D(GL_TEXTURE_2D, 0, table[i].internalformat, 32, 32, 0, table[i].glformat, table[i].gltype, NULL);
     status = glGetError();
-    if (status == GL_INVALID_VALUE || status == GL_INVALID_ENUM || status == GL_INVALID_OPERATION) {
+    /* Currently possible errors are:
+     *  * GL_INVALID_VALUE
+     *  * GL_INVALID_ENUM
+     *  * GL_INVALID_OPERATION
+     *  * GL_OUT_OF_MEMORY
+     */
+    if (status != GL_NO_ERROR) {
       struct vrend_format_table *entry = NULL;
       uint8_t swizzle[4];
       binding = VIRGL_BIND_SAMPLER_VIEW | VIRGL_BIND_RENDER_TARGET;
@@ -483,11 +486,13 @@ static void vrend_add_formats(struct vrend_format_table *table, int num_entries)
         entry = &rg_base_formats[0];
         swizzle[0] = swizzle[1] = swizzle[2] = PIPE_SWIZZLE_ZERO;
         swizzle[3] = PIPE_SWIZZLE_RED;
+        flags |= VIRGL_TEXTURE_NEED_SWIZZLE;
         break;
       case VIRGL_FORMAT_A16_UNORM:
         entry = &rg_base_formats[2];
         swizzle[0] = swizzle[1] = swizzle[2] = PIPE_SWIZZLE_ZERO;
         swizzle[3] = PIPE_SWIZZLE_RED;
+        flags |= VIRGL_TEXTURE_NEED_SWIZZLE;
         break;
       default:
         break;
@@ -499,6 +504,14 @@ static void vrend_add_formats(struct vrend_format_table *table, int num_entries)
       glDeleteTextures(1, &tex_id);
       glDeleteFramebuffers(1, &fb_id);
       continue;
+    }
+
+    if (is_desktop_gl) {
+      glTexImage2D(GL_TEXTURE_RECTANGLE_NV, 0, table[i].internalformat, 32, 32, 0, table[i].glformat, table[i].gltype, NULL);
+      status = glGetError();
+      if (status == GL_NO_ERROR) {
+        flags |= VIRGL_TEXTURE_CAN_TARGET_RECTANGLE;
+      }
     }
 
     if (table[i].format < VIRGL_FORMAT_MAX  && util_format_is_depth_or_stencil(table[i].format)) {
@@ -523,14 +536,19 @@ static void vrend_add_formats(struct vrend_format_table *table, int num_entries)
 
     status = glCheckFramebufferStatus(GL_FRAMEBUFFER);
     binding = VIRGL_BIND_SAMPLER_VIEW;
-    if (status == GL_FRAMEBUFFER_COMPLETE) {
+    if (status == GL_FRAMEBUFFER_COMPLETE)
        binding |= is_depth ? VIRGL_BIND_DEPTH_STENCIL : VIRGL_BIND_RENDER_TARGET;
 
-       if (is_desktop_gl ||
-           (is_depth && depth_stencil_formats_can_readback(table[i].format)) ||
-           color_format_can_readback(&table[i], gles_ver))
-          flags |= VIRGL_TEXTURE_CAN_READBACK;
-    }
+    /* On OpenGL all textures can be read back using glGetTexImage, but on GLES
+       we have to be able to bind textures to framebuffers, and use glReadPixels
+       to get the data. And apart from a few formats where support is required
+       (by the GLES version), we have to query the driver to identify additional
+       formats that are supported as destination formats by glReadPixels. */
+    if (is_desktop_gl ||
+        (status == GL_FRAMEBUFFER_COMPLETE &&
+         (is_depth ? depth_stencil_formats_can_readback(table[i].format) :
+                     color_format_can_readback(&table[i], gles_ver))))
+       flags |= VIRGL_TEXTURE_CAN_READBACK;
 
     glDeleteTextures(1, &tex_id);
     glDeleteFramebuffers(1, &fb_id);
@@ -595,7 +613,6 @@ void vrend_build_format_list_gl(void)
    */
   add_formats(gl_base_rgba_formats);
   add_formats(gl_bgra_formats);
-  add_formats(gl_srgb_formats);
 }
 
 void vrend_build_format_list_gles(void)
@@ -634,6 +651,34 @@ void vrend_check_texture_storage(struct vrend_format_table *table)
          glTexStorage2D(GL_TEXTURE_2D, 1, table[i].internalformat, 32, 32);
          if (glGetError() == GL_NO_ERROR)
             table[i].flags |= VIRGL_TEXTURE_CAN_TEXTURE_STORAGE;
+         glDeleteTextures(1, &tex_id);
+      }
+   }
+}
+
+void vrend_check_texture_multisample(struct vrend_format_table *table,
+                                     bool enable_storage)
+{
+   bool is_desktop_gl = epoxy_is_desktop_gl();
+   for (int i = 0; i < VIRGL_FORMAT_MAX_EXTENDED; i++) {
+      bool function_available =
+         (table[i].flags & VIRGL_TEXTURE_CAN_TEXTURE_STORAGE) ? enable_storage : is_desktop_gl;
+
+      if (table[i].internalformat != 0 &&
+          !(table[i].flags & VIRGL_TEXTURE_CAN_MULTISAMPLE) &&
+          function_available) {
+         GLuint tex_id;
+         glGenTextures(1, &tex_id);
+         glBindTexture(GL_TEXTURE_2D_MULTISAMPLE, tex_id);
+         if (table[i].flags & VIRGL_TEXTURE_CAN_TEXTURE_STORAGE) {
+            glTexStorage2DMultisample(GL_TEXTURE_2D_MULTISAMPLE, 2,
+                                      table[i].internalformat, 32, 32, GL_TRUE);
+         } else {
+            glTexImage2DMultisample(GL_TEXTURE_2D_MULTISAMPLE, 2,
+                                    table[i].internalformat, 32, 32, GL_TRUE);
+         }
+         if (glGetError() == GL_NO_ERROR)
+            table[i].flags |= VIRGL_TEXTURE_CAN_MULTISAMPLE;
          glDeleteTextures(1, &tex_id);
       }
    }
