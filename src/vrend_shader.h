@@ -30,6 +30,11 @@
 
 #include "vrend_strbuf.h"
 
+#define VIRGL_NUM_CLIP_PLANES 8
+
+#define VREND_SHADER_SAMPLER_VIEWS_MASK_LENGTH \
+   ((PIPE_MAX_SHADER_SAMPLER_VIEWS + 63) / 64)
+
 enum gl_advanced_blend_mode
 {
    BLEND_NONE = 0,
@@ -70,7 +75,6 @@ struct vrend_layout_info {
    unsigned sid : 16 ;
    unsigned location : 16 ;
    unsigned array_id : 16 ;
-   unsigned usage_mask : 5;
 };
 
 struct vrend_fs_shader_info {
@@ -89,6 +93,7 @@ struct vrend_shader_info_out {
 
 struct vrend_shader_info_in {
    uint64_t generic_emitted_mask;
+   uint64_t texcoord_emitted_mask;
    uint32_t num_indirect_generic : 8;
    uint32_t num_indirect_patch : 8;
    uint32_t use_pervertex : 1;
@@ -96,7 +101,7 @@ struct vrend_shader_info_in {
 
 
 struct vrend_shader_info {
-   uint64_t invariant_outputs;
+   uint32_t invariant_outputs[4];
    struct vrend_shader_info_out out;
    struct vrend_shader_info_in in;
 
@@ -105,6 +110,9 @@ struct vrend_shader_info {
    struct vrend_array *image_arrays;
    char **so_names;
    struct pipe_stream_output_info so_info;
+
+   /* 8 cbufs + depth + stencil + samplemask */
+   int8_t fs_output_layout[12];
 
    uint32_t samplers_used_mask;
    uint32_t images_used_mask;
@@ -127,19 +135,23 @@ struct vrend_shader_info {
    uint8_t ubo_indirect : 1;
    uint8_t tes_point_mode : 1;
    uint8_t gles_use_tex_query_level : 1;
+   uint8_t separable_program : 1;
 };
 
 struct vrend_variable_shader_info {
    struct vrend_fs_shader_info fs_info;
+   uint32_t num_in_clip:4;
+   uint32_t num_in_cull:4;
+   uint32_t num_out_clip:4;
+   uint32_t num_out_cull:4;
    int num_ucp;
-   int num_clip;
-   int num_cull;
+   int legacy_color_bits;
 };
 
 struct vrend_shader_key {
-   uint64_t force_invariant_inputs;
+   uint32_t force_invariant_inputs[4];
 
-   struct vrend_fs_shader_info *fs_info;
+   struct vrend_fs_shader_info fs_info;
    struct vrend_shader_info_out input;
    struct vrend_shader_info_in output;
    struct vrend_layout_info prev_stage_generic_and_patch_outputs_layout[64];
@@ -149,7 +161,7 @@ struct vrend_shader_key {
          uint8_t surface_component_bits[PIPE_MAX_COLOR_BUFS];
          uint32_t coord_replace;
          uint8_t swizzle_output_rgb_to_bgr;
-         uint8_t convert_linear_to_srgb_on_write;
+         uint8_t needs_manual_srgb_encode_bitmask;
          uint8_t cbufs_are_a8_bitmask;
          uint8_t cbufs_signed_int_bitmask;
          uint8_t cbufs_unsigned_int_bitmask;
@@ -157,21 +169,30 @@ struct vrend_shader_key {
          uint32_t logicop_enabled : 1;
          uint32_t prim_is_points : 1;
          uint32_t invert_origin : 1;
+         uint32_t available_color_in_bits : 4;
       } fs;
 
       struct {
          uint32_t attrib_signed_int_bitmask;
          uint32_t attrib_unsigned_int_bitmask;
+         uint32_t attrib_zyxw_bitmask;
          uint32_t fog_fixup_mask;
       } vs;
+
+      struct {
+         uint32_t emit_clip_distance : 1;
+      } gs;
    };
 
-   uint32_t compiled_fs_uid;
+   uint64_t sampler_views_lower_swizzle_mask[VREND_SHADER_SAMPLER_VIEWS_MASK_LENGTH];
+   uint64_t sampler_views_emulated_rect_mask[VREND_SHADER_SAMPLER_VIEWS_MASK_LENGTH];
+   uint16_t tex_swizzle[PIPE_MAX_SHADER_SAMPLER_VIEWS];
 
    uint8_t alpha_test;
-   uint8_t clip_plane_enable;
-   uint8_t num_cull : 4;
-   uint8_t num_clip : 4;
+   uint8_t num_in_cull : 4;
+   uint8_t num_in_clip : 4;
+   uint8_t num_out_cull : 4;
+   uint8_t num_out_clip : 4;
    uint8_t pstipple_tex : 1;
    uint8_t add_alpha_test : 1;
    uint8_t color_two_side : 1;
@@ -195,6 +216,7 @@ struct vrend_shader_cfg {
    uint32_t use_integer : 1;
    uint32_t has_dual_src_blend : 1;
    uint32_t has_fbfetch_coherent : 1;
+   uint32_t has_cull_distance : 1;
 };
 
 struct vrend_context;
@@ -228,5 +250,19 @@ bool vrend_shader_create_passthrough_tcs(const struct vrend_context *ctx,
                                          int vertices_per_patch);
 
 bool vrend_shader_needs_alpha_func(const struct vrend_shader_key *key);
+
+static inline bool vrend_shader_sampler_views_mask_get(
+   const uint64_t mask[static VREND_SHADER_SAMPLER_VIEWS_MASK_LENGTH],
+   int index)
+{
+   return (mask[index / 64] >> (index % 64)) & 1;
+}
+
+static inline void vrend_shader_sampler_views_mask_set(
+   uint64_t mask[static VREND_SHADER_SAMPLER_VIEWS_MASK_LENGTH],
+   int index)
+{
+   mask[index / 64] |= 1ull << (index % 64);
+}
 
 #endif
