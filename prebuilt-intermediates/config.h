@@ -1,4 +1,5 @@
 // Updated using config.h.meson
+#define _GNU_SOURCE
 #define VIRGL_RENDERER_UNSTABLE_APIS 1
 #define HAVE___BUILTIN_BSWAP32 1
 #define HAVE___BUILTIN_BSWAP64 1
