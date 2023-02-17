@@ -351,6 +351,8 @@ shaders@glsl-uniform-interstage-limits@subdivide 5
 shaders@glsl-uniform-interstage-limits@subdivide 5- statechanges
 spec@arb_fragment_layer_viewport@layer-gs-writes-in-range
 spec@arb_fragment_layer_viewport@viewport-gs-writes-in-range
+spec@arb_framebuffer_no_attachments@arb_framebuffer_no_attachments-atomic@Basic
+spec@arb_framebuffer_no_attachments@arb_framebuffer_no_attachments-atomic
 spec@arb_framebuffer_no_attachments@arb_framebuffer_no_attachments-atomic@MS4
 spec@arb_framebuffer_no_attachments@arb_framebuffer_no_attachments-atomic@Per-sample
 spec@arb_framebuffer_no_attachments@arb_framebuffer_no_attachments-atomic@glScissor
@@ -367,6 +369,7 @@ spec@arb_shader_storage_buffer_object@execution@ssbo-atomicexchange-int
 spec@arb_shader_storage_buffer_object@layout-std140-write-shader
 spec@arb_timer_query@query gl_timestamp
 spec@arb_timer_query@timestamp-get
+spec@ext_timer_query@time-elapsed
 spec@ext_framebuffer_blit@fbo-blit-check-limits
 spec@ext_framebuffer_blit@fbo-sys-blit
 spec@ext_framebuffer_blit@fbo-sys-sub-blit

@@ -185,12 +185,12 @@ void virgl_renderer_fill_caps(uint32_t set, uint32_t version,
 }
 
 static void per_context_fence_retire(struct virgl_context *ctx,
-                                     uint64_t queue_id,
+                                     uint32_t ring_idx,
                                      uint64_t fence_id)
 {
    state.cbs->write_context_fence(state.cookie,
                                   ctx->ctx_id,
-                                  queue_id,
+                                  ring_idx,
                                   fence_id);
 }
 
@@ -405,15 +405,16 @@ int virgl_renderer_create_fence(int client_fence_id, UNUSED uint32_t ctx_id)
 
 int virgl_renderer_context_create_fence(uint32_t ctx_id,
                                         uint32_t flags,
-                                        uint64_t queue_id,
+                                        uint32_t ring_idx,
                                         uint64_t fence_id)
 {
+   TRACE_FUNC();
    struct virgl_context *ctx = virgl_context_lookup(ctx_id);
    if (!ctx)
       return -EINVAL;
 
    assert(state.cbs->version >= 3 && state.cbs->write_context_fence);
-   return ctx->submit_fence(ctx, flags, queue_id, fence_id);
+   return ctx->submit_fence(ctx, flags, ring_idx, fence_id);
 }
 
 void virgl_renderer_context_poll(uint32_t ctx_id)
@@ -436,7 +437,6 @@ int virgl_renderer_context_get_poll_fd(uint32_t ctx_id)
 
 void virgl_renderer_force_ctx_0(void)
 {
-   TRACE_FUNC();
    if (state.vrend_initialized)
       vrend_renderer_force_ctx_0();
 }
@@ -564,11 +564,20 @@ static int make_current(virgl_renderer_gl_context ctx)
    return state.cbs->make_current(state.cookie, 0, ctx);
 }
 
+static int get_drm_fd(void)
+{
+   if (state.cbs->get_drm_fd)
+      return state.cbs->get_drm_fd(state.cookie);
+
+   return -1;
+}
+
 static const struct vrend_if_cbs vrend_cbs = {
    ctx0_fence_retire,
    create_gl_context,
    destroy_gl_context,
    make_current,
+   get_drm_fd,
 };
 
 static int
@@ -596,11 +605,29 @@ void *virgl_renderer_get_cursor_data(uint32_t resource_id, uint32_t *width, uint
                                              height);
 }
 
+static bool
+virgl_context_foreach_retire_fences(struct virgl_context *ctx,
+                                    UNUSED void* data)
+{
+   /* vrend contexts are polled explicitly by the caller */
+   if (ctx->capset_id != VIRGL_RENDERER_CAPSET_VIRGL &&
+       ctx->capset_id != VIRGL_RENDERER_CAPSET_VIRGL2)
+   {
+      assert(ctx->retire_fences);
+      ctx->retire_fences(ctx);
+   }
+   return true;
+}
+
 void virgl_renderer_poll(void)
 {
    TRACE_FUNC();
    if (state.vrend_initialized)
       vrend_renderer_poll();
+
+   struct virgl_context_foreach_args args;
+   args.callback = virgl_context_foreach_retire_fences;
+   virgl_context_foreach(&args);
 }
 
 void virgl_renderer_cleanup(UNUSED void *cookie)
@@ -652,8 +679,9 @@ int virgl_renderer_init(void *cookie, int flags, struct virgl_renderer_callbacks
       return -EBUSY;
 
    if (!state.client_initialized) {
-      if (cbs && (cbs->version < 1 ||
-                  cbs->version > VIRGL_RENDERER_CALLBACKS_VERSION))
+      if (!cbs ||
+          cbs->version < 1 ||
+          cbs->version > VIRGL_RENDERER_CALLBACKS_VERSION)
          return -1;
 
       state.cookie = cookie;
@@ -703,18 +731,23 @@ int virgl_renderer_init(void *cookie, int flags, struct virgl_renderer_callbacks
       void *egl_display = NULL;
 
       if (!cbs->create_gl_context || !cbs->destroy_gl_context ||
-          !cbs->make_current)
+          !cbs->make_current) {
+         ret = EINVAL;
          goto fail;
+      }
 
       egl_display = state.cbs->get_egl_display(cookie);
 
-      if (!egl_display)
+      if (!egl_display) {
+         ret = -1;
          goto fail;
-
+      }
       ret = vrend_winsys_init_external(egl_display);
 
-      if (ret)
+      if (ret) {
+         ret = -1;
          goto fail;
+      }
 
       state.external_winsys_initialized = true;
    }
@@ -733,6 +766,8 @@ int virgl_renderer_init(void *cookie, int flags, struct virgl_renderer_callbacks
          renderer_flags |= VREND_USE_ASYNC_FENCE_CB;
       if (flags & VIRGL_RENDERER_USE_EXTERNAL_BLOB)
          renderer_flags |= VREND_USE_EXTERNAL_BLOB;
+      if (flags & VIRGL_RENDERER_USE_VIDEO)
+         renderer_flags |= VREND_USE_VIDEO;
 
       ret = vrend_renderer_init(&vrend_cbs, renderer_flags);
       if (ret)
@@ -1088,6 +1123,7 @@ int virgl_renderer_resource_get_map_info(uint32_t res_handle, uint32_t *map_info
 int
 virgl_renderer_resource_export_blob(uint32_t res_id, uint32_t *fd_type, int *fd)
 {
+   TRACE_FUNC();
    struct virgl_resource *res = virgl_resource_lookup(res_id);
    if (!res)
       return EINVAL;

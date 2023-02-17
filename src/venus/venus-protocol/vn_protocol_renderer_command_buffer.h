@@ -14,6 +14,12 @@
 #pragma GCC diagnostic ignored "-Wpointer-arith"
 #pragma GCC diagnostic ignored "-Wunused-parameter"
 
+/*
+ * These structs/unions/commands are not included
+ *
+ *   vkCmdPushDescriptorSetWithTemplateKHR
+ */
+
 /* struct VkCommandBufferAllocateInfo chain */
 
 static inline void *
@@ -454,6 +460,40 @@ vn_replace_VkCommandBufferBeginInfo_handle(VkCommandBufferBeginInfo *val)
         }
         pnext = pnext->pNext;
     } while (pnext);
+}
+
+/* struct VkMultiDrawInfoEXT */
+
+static inline void
+vn_decode_VkMultiDrawInfoEXT_temp(struct vn_cs_decoder *dec, VkMultiDrawInfoEXT *val)
+{
+    vn_decode_uint32_t(dec, &val->firstVertex);
+    vn_decode_uint32_t(dec, &val->vertexCount);
+}
+
+static inline void
+vn_replace_VkMultiDrawInfoEXT_handle(VkMultiDrawInfoEXT *val)
+{
+    /* skip val->firstVertex */
+    /* skip val->vertexCount */
+}
+
+/* struct VkMultiDrawIndexedInfoEXT */
+
+static inline void
+vn_decode_VkMultiDrawIndexedInfoEXT_temp(struct vn_cs_decoder *dec, VkMultiDrawIndexedInfoEXT *val)
+{
+    vn_decode_uint32_t(dec, &val->firstIndex);
+    vn_decode_uint32_t(dec, &val->indexCount);
+    vn_decode_int32_t(dec, &val->vertexOffset);
+}
+
+static inline void
+vn_replace_VkMultiDrawIndexedInfoEXT_handle(VkMultiDrawIndexedInfoEXT *val)
+{
+    /* skip val->firstIndex */
+    /* skip val->indexCount */
+    /* skip val->vertexOffset */
 }
 
 /* struct VkBufferCopy */
@@ -3138,6 +3178,103 @@ static inline void vn_encode_vkCmdDrawIndexed_reply(struct vn_cs_encoder *enc, c
     /* skip args->firstInstance */
 }
 
+static inline void vn_decode_vkCmdDrawMultiEXT_args_temp(struct vn_cs_decoder *dec, struct vn_command_vkCmdDrawMultiEXT *args)
+{
+    vn_decode_VkCommandBuffer_lookup(dec, &args->commandBuffer);
+    vn_decode_uint32_t(dec, &args->drawCount);
+    if (vn_peek_array_size(dec)) {
+        const uint32_t iter_count = vn_decode_array_size(dec, args->drawCount);
+        args->pVertexInfo = vn_cs_decoder_alloc_temp(dec, sizeof(*args->pVertexInfo) * iter_count);
+        if (!args->pVertexInfo) return;
+        for (uint32_t i = 0; i < iter_count; i++)
+            vn_decode_VkMultiDrawInfoEXT_temp(dec, &((VkMultiDrawInfoEXT *)args->pVertexInfo)[i]);
+    } else {
+        vn_decode_array_size_unchecked(dec);
+        args->pVertexInfo = NULL;
+    }
+    vn_decode_uint32_t(dec, &args->instanceCount);
+    vn_decode_uint32_t(dec, &args->firstInstance);
+    vn_decode_uint32_t(dec, &args->stride);
+}
+
+static inline void vn_replace_vkCmdDrawMultiEXT_args_handle(struct vn_command_vkCmdDrawMultiEXT *args)
+{
+    vn_replace_VkCommandBuffer_handle(&args->commandBuffer);
+    /* skip args->drawCount */
+    if (args->pVertexInfo) {
+       for (uint32_t i = 0; i < args->drawCount; i++)
+            vn_replace_VkMultiDrawInfoEXT_handle(&((VkMultiDrawInfoEXT *)args->pVertexInfo)[i]);
+    }
+    /* skip args->instanceCount */
+    /* skip args->firstInstance */
+    /* skip args->stride */
+}
+
+static inline void vn_encode_vkCmdDrawMultiEXT_reply(struct vn_cs_encoder *enc, const struct vn_command_vkCmdDrawMultiEXT *args)
+{
+    vn_encode_VkCommandTypeEXT(enc, &(VkCommandTypeEXT){VK_COMMAND_TYPE_vkCmdDrawMultiEXT_EXT});
+
+    /* skip args->commandBuffer */
+    /* skip args->drawCount */
+    /* skip args->pVertexInfo */
+    /* skip args->instanceCount */
+    /* skip args->firstInstance */
+    /* skip args->stride */
+}
+
+static inline void vn_decode_vkCmdDrawMultiIndexedEXT_args_temp(struct vn_cs_decoder *dec, struct vn_command_vkCmdDrawMultiIndexedEXT *args)
+{
+    vn_decode_VkCommandBuffer_lookup(dec, &args->commandBuffer);
+    vn_decode_uint32_t(dec, &args->drawCount);
+    if (vn_peek_array_size(dec)) {
+        const uint32_t iter_count = vn_decode_array_size(dec, args->drawCount);
+        args->pIndexInfo = vn_cs_decoder_alloc_temp(dec, sizeof(*args->pIndexInfo) * iter_count);
+        if (!args->pIndexInfo) return;
+        for (uint32_t i = 0; i < iter_count; i++)
+            vn_decode_VkMultiDrawIndexedInfoEXT_temp(dec, &((VkMultiDrawIndexedInfoEXT *)args->pIndexInfo)[i]);
+    } else {
+        vn_decode_array_size_unchecked(dec);
+        args->pIndexInfo = NULL;
+    }
+    vn_decode_uint32_t(dec, &args->instanceCount);
+    vn_decode_uint32_t(dec, &args->firstInstance);
+    vn_decode_uint32_t(dec, &args->stride);
+    if (vn_decode_simple_pointer(dec)) {
+        args->pVertexOffset = vn_cs_decoder_alloc_temp(dec, sizeof(*args->pVertexOffset));
+        if (!args->pVertexOffset) return;
+        vn_decode_int32_t(dec, (int32_t *)args->pVertexOffset);
+    } else {
+        args->pVertexOffset = NULL;
+    }
+}
+
+static inline void vn_replace_vkCmdDrawMultiIndexedEXT_args_handle(struct vn_command_vkCmdDrawMultiIndexedEXT *args)
+{
+    vn_replace_VkCommandBuffer_handle(&args->commandBuffer);
+    /* skip args->drawCount */
+    if (args->pIndexInfo) {
+       for (uint32_t i = 0; i < args->drawCount; i++)
+            vn_replace_VkMultiDrawIndexedInfoEXT_handle(&((VkMultiDrawIndexedInfoEXT *)args->pIndexInfo)[i]);
+    }
+    /* skip args->instanceCount */
+    /* skip args->firstInstance */
+    /* skip args->stride */
+    /* skip args->pVertexOffset */
+}
+
+static inline void vn_encode_vkCmdDrawMultiIndexedEXT_reply(struct vn_cs_encoder *enc, const struct vn_command_vkCmdDrawMultiIndexedEXT *args)
+{
+    vn_encode_VkCommandTypeEXT(enc, &(VkCommandTypeEXT){VK_COMMAND_TYPE_vkCmdDrawMultiIndexedEXT_EXT});
+
+    /* skip args->commandBuffer */
+    /* skip args->drawCount */
+    /* skip args->pIndexInfo */
+    /* skip args->instanceCount */
+    /* skip args->firstInstance */
+    /* skip args->stride */
+    /* skip args->pVertexOffset */
+}
+
 static inline void vn_decode_vkCmdDrawIndirect_args_temp(struct vn_cs_decoder *dec, struct vn_command_vkCmdDrawIndirect *args)
 {
     vn_decode_VkCommandBuffer_lookup(dec, &args->commandBuffer);
@@ -4285,6 +4422,50 @@ static inline void vn_encode_vkCmdExecuteCommands_reply(struct vn_cs_encoder *en
     /* skip args->commandBuffer */
     /* skip args->commandBufferCount */
     /* skip args->pCommandBuffers */
+}
+
+static inline void vn_decode_vkCmdPushDescriptorSetKHR_args_temp(struct vn_cs_decoder *dec, struct vn_command_vkCmdPushDescriptorSetKHR *args)
+{
+    vn_decode_VkCommandBuffer_lookup(dec, &args->commandBuffer);
+    vn_decode_VkPipelineBindPoint(dec, &args->pipelineBindPoint);
+    vn_decode_VkPipelineLayout_lookup(dec, &args->layout);
+    vn_decode_uint32_t(dec, &args->set);
+    vn_decode_uint32_t(dec, &args->descriptorWriteCount);
+    if (vn_peek_array_size(dec)) {
+        const uint32_t iter_count = vn_decode_array_size(dec, args->descriptorWriteCount);
+        args->pDescriptorWrites = vn_cs_decoder_alloc_temp(dec, sizeof(*args->pDescriptorWrites) * iter_count);
+        if (!args->pDescriptorWrites) return;
+        for (uint32_t i = 0; i < iter_count; i++)
+            vn_decode_VkWriteDescriptorSet_temp(dec, &((VkWriteDescriptorSet *)args->pDescriptorWrites)[i]);
+    } else {
+        vn_decode_array_size(dec, args->descriptorWriteCount);
+        args->pDescriptorWrites = NULL;
+    }
+}
+
+static inline void vn_replace_vkCmdPushDescriptorSetKHR_args_handle(struct vn_command_vkCmdPushDescriptorSetKHR *args)
+{
+    vn_replace_VkCommandBuffer_handle(&args->commandBuffer);
+    /* skip args->pipelineBindPoint */
+    vn_replace_VkPipelineLayout_handle(&args->layout);
+    /* skip args->set */
+    /* skip args->descriptorWriteCount */
+    if (args->pDescriptorWrites) {
+       for (uint32_t i = 0; i < args->descriptorWriteCount; i++)
+            vn_replace_VkWriteDescriptorSet_handle(&((VkWriteDescriptorSet *)args->pDescriptorWrites)[i]);
+    }
+}
+
+static inline void vn_encode_vkCmdPushDescriptorSetKHR_reply(struct vn_cs_encoder *enc, const struct vn_command_vkCmdPushDescriptorSetKHR *args)
+{
+    vn_encode_VkCommandTypeEXT(enc, &(VkCommandTypeEXT){VK_COMMAND_TYPE_vkCmdPushDescriptorSetKHR_EXT});
+
+    /* skip args->commandBuffer */
+    /* skip args->pipelineBindPoint */
+    /* skip args->layout */
+    /* skip args->set */
+    /* skip args->descriptorWriteCount */
+    /* skip args->pDescriptorWrites */
 }
 
 static inline void vn_decode_vkCmdSetDeviceMask_args_temp(struct vn_cs_decoder *dec, struct vn_command_vkCmdSetDeviceMask *args)
@@ -6109,6 +6290,56 @@ static inline void vn_dispatch_vkCmdDrawIndexed(struct vn_dispatch_context *ctx,
     vn_cs_decoder_reset_temp_pool(ctx->decoder);
 }
 
+static inline void vn_dispatch_vkCmdDrawMultiEXT(struct vn_dispatch_context *ctx, VkCommandFlagsEXT flags)
+{
+    struct vn_command_vkCmdDrawMultiEXT args;
+
+    if (!ctx->dispatch_vkCmdDrawMultiEXT) {
+        vn_cs_decoder_set_fatal(ctx->decoder);
+        return;
+    }
+
+    vn_decode_vkCmdDrawMultiEXT_args_temp(ctx->decoder, &args);
+    if (!args.commandBuffer) {
+        vn_cs_decoder_set_fatal(ctx->decoder);
+        return;
+    }
+
+    if (!vn_cs_decoder_get_fatal(ctx->decoder))
+        ctx->dispatch_vkCmdDrawMultiEXT(ctx, &args);
+
+
+    if (!vn_cs_decoder_get_fatal(ctx->decoder) && (flags & VK_COMMAND_GENERATE_REPLY_BIT_EXT))
+       vn_encode_vkCmdDrawMultiEXT_reply(ctx->encoder, &args);
+
+    vn_cs_decoder_reset_temp_pool(ctx->decoder);
+}
+
+static inline void vn_dispatch_vkCmdDrawMultiIndexedEXT(struct vn_dispatch_context *ctx, VkCommandFlagsEXT flags)
+{
+    struct vn_command_vkCmdDrawMultiIndexedEXT args;
+
+    if (!ctx->dispatch_vkCmdDrawMultiIndexedEXT) {
+        vn_cs_decoder_set_fatal(ctx->decoder);
+        return;
+    }
+
+    vn_decode_vkCmdDrawMultiIndexedEXT_args_temp(ctx->decoder, &args);
+    if (!args.commandBuffer) {
+        vn_cs_decoder_set_fatal(ctx->decoder);
+        return;
+    }
+
+    if (!vn_cs_decoder_get_fatal(ctx->decoder))
+        ctx->dispatch_vkCmdDrawMultiIndexedEXT(ctx, &args);
+
+
+    if (!vn_cs_decoder_get_fatal(ctx->decoder) && (flags & VK_COMMAND_GENERATE_REPLY_BIT_EXT))
+       vn_encode_vkCmdDrawMultiIndexedEXT_reply(ctx->encoder, &args);
+
+    vn_cs_decoder_reset_temp_pool(ctx->decoder);
+}
+
 static inline void vn_dispatch_vkCmdDrawIndirect(struct vn_dispatch_context *ctx, VkCommandFlagsEXT flags)
 {
     struct vn_command_vkCmdDrawIndirect args;
@@ -6880,6 +7111,31 @@ static inline void vn_dispatch_vkCmdExecuteCommands(struct vn_dispatch_context *
 
     if (!vn_cs_decoder_get_fatal(ctx->decoder) && (flags & VK_COMMAND_GENERATE_REPLY_BIT_EXT))
        vn_encode_vkCmdExecuteCommands_reply(ctx->encoder, &args);
+
+    vn_cs_decoder_reset_temp_pool(ctx->decoder);
+}
+
+static inline void vn_dispatch_vkCmdPushDescriptorSetKHR(struct vn_dispatch_context *ctx, VkCommandFlagsEXT flags)
+{
+    struct vn_command_vkCmdPushDescriptorSetKHR args;
+
+    if (!ctx->dispatch_vkCmdPushDescriptorSetKHR) {
+        vn_cs_decoder_set_fatal(ctx->decoder);
+        return;
+    }
+
+    vn_decode_vkCmdPushDescriptorSetKHR_args_temp(ctx->decoder, &args);
+    if (!args.commandBuffer) {
+        vn_cs_decoder_set_fatal(ctx->decoder);
+        return;
+    }
+
+    if (!vn_cs_decoder_get_fatal(ctx->decoder))
+        ctx->dispatch_vkCmdPushDescriptorSetKHR(ctx, &args);
+
+
+    if (!vn_cs_decoder_get_fatal(ctx->decoder) && (flags & VK_COMMAND_GENERATE_REPLY_BIT_EXT))
+       vn_encode_vkCmdPushDescriptorSetKHR_reply(ctx->encoder, &args);
 
     vn_cs_decoder_reset_temp_pool(ctx->decoder);
 }

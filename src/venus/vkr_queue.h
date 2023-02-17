@@ -13,7 +13,7 @@ struct vkr_queue_sync {
    bool device_lost;
 
    uint32_t flags;
-   uint64_t queue_id;
+   uint32_t ring_idx;
    uint64_t fence_id;
 
    struct list_head head;
@@ -28,6 +28,9 @@ struct vkr_queue {
    VkDeviceQueueCreateFlags flags;
    uint32_t family;
    uint32_t index;
+
+   /* only used when client driver uses multiple timelines */
+   uint32_t ring_idx;
 
    /* Submitted fences are added to pending_syncs first.  How submitted fences
     * are retired depends on VKR_RENDERER_THREAD_SYNC and
@@ -87,7 +90,7 @@ vkr_context_init_event_dispatch(struct vkr_context *ctx);
 struct vkr_queue_sync *
 vkr_device_alloc_queue_sync(struct vkr_device *dev,
                             uint32_t fence_flags,
-                            uint64_t queue_id,
+                            uint32_t ring_idx,
                             uint64_t fence_id);
 
 void

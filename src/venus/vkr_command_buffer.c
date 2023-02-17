@@ -797,6 +797,67 @@ vkr_dispatch_vkCmdEndRendering(UNUSED struct vn_dispatch_context *ctx,
    VKR_CMD_CALL(CmdEndRendering, args);
 }
 
+static void
+vkr_dispatch_vkCmdPipelineBarrier2(UNUSED struct vn_dispatch_context *ctx,
+                                   struct vn_command_vkCmdPipelineBarrier2 *args)
+{
+   VKR_CMD_CALL(CmdPipelineBarrier2, args, args->pDependencyInfo);
+}
+
+static void
+vkr_dispatch_vkCmdResetEvent2(UNUSED struct vn_dispatch_context *ctx,
+                              struct vn_command_vkCmdResetEvent2 *args)
+{
+   VKR_CMD_CALL(CmdResetEvent2, args, args->event, args->stageMask);
+}
+
+static void
+vkr_dispatch_vkCmdSetEvent2(UNUSED struct vn_dispatch_context *ctx,
+                            struct vn_command_vkCmdSetEvent2 *args)
+{
+   VKR_CMD_CALL(CmdSetEvent2, args, args->event, args->pDependencyInfo);
+}
+
+static void
+vkr_dispatch_vkCmdWaitEvents2(UNUSED struct vn_dispatch_context *ctx,
+                              struct vn_command_vkCmdWaitEvents2 *args)
+{
+   VKR_CMD_CALL(CmdWaitEvents2, args, args->eventCount, args->pEvents,
+                args->pDependencyInfos);
+}
+
+static void
+vkr_dispatch_vkCmdWriteTimestamp2(UNUSED struct vn_dispatch_context *ctx,
+                                  struct vn_command_vkCmdWriteTimestamp2 *args)
+{
+   VKR_CMD_CALL(CmdWriteTimestamp2, args, args->stage, args->queryPool, args->query);
+}
+
+static void
+vkr_dispatch_vkCmdDrawMultiEXT(UNUSED struct vn_dispatch_context *dispatch,
+                               struct vn_command_vkCmdDrawMultiEXT *args)
+{
+   VKR_CMD_CALL(CmdDrawMultiEXT, args, args->drawCount, args->pVertexInfo,
+                args->instanceCount, args->firstInstance, args->stride);
+}
+
+static void
+vkr_dispatch_vkCmdDrawMultiIndexedEXT(UNUSED struct vn_dispatch_context *dispatch,
+                                      struct vn_command_vkCmdDrawMultiIndexedEXT *args)
+{
+   VKR_CMD_CALL(CmdDrawMultiIndexedEXT, args, args->drawCount, args->pIndexInfo,
+                args->instanceCount, args->firstInstance, args->stride,
+                args->pVertexOffset);
+}
+
+static void
+vkr_dispatch_vkCmdPushDescriptorSetKHR(UNUSED struct vn_dispatch_context *dispatch,
+                                       struct vn_command_vkCmdPushDescriptorSetKHR *args)
+{
+   VKR_CMD_CALL(CmdPushDescriptorSetKHR, args, args->pipelineBindPoint, args->layout,
+                args->set, args->descriptorWriteCount, args->pDescriptorWrites);
+}
+
 void
 vkr_context_init_command_pool_dispatch(struct vkr_context *ctx)
 {
@@ -911,6 +972,13 @@ vkr_context_init_command_buffer_dispatch(struct vkr_context *ctx)
    dispatch->dispatch_vkCmdBeginRendering = vkr_dispatch_vkCmdBeginRendering;
    dispatch->dispatch_vkCmdEndRendering = vkr_dispatch_vkCmdEndRendering;
 
+   /* VK_KHR_synchronization2 */
+   dispatch->dispatch_vkCmdPipelineBarrier2 = vkr_dispatch_vkCmdPipelineBarrier2;
+   dispatch->dispatch_vkCmdResetEvent2 = vkr_dispatch_vkCmdResetEvent2;
+   dispatch->dispatch_vkCmdSetEvent2 = vkr_dispatch_vkCmdSetEvent2;
+   dispatch->dispatch_vkCmdWaitEvents2 = vkr_dispatch_vkCmdWaitEvents2;
+   dispatch->dispatch_vkCmdWriteTimestamp2 = vkr_dispatch_vkCmdWriteTimestamp2;
+
    /* VK_EXT_extended_dynamic_state2 */
    dispatch->dispatch_vkCmdSetRasterizerDiscardEnable =
       vkr_dispatch_vkCmdSetRasterizerDiscardEnable;
@@ -926,4 +994,12 @@ vkr_context_init_command_buffer_dispatch(struct vkr_context *ctx)
       vkr_dispatch_vkCmdBeginConditionalRenderingEXT;
    dispatch->dispatch_vkCmdEndConditionalRenderingEXT =
       vkr_dispatch_vkCmdEndConditionalRenderingEXT;
+
+   /* VK_EXT_multi_draw */
+   dispatch->dispatch_vkCmdDrawMultiEXT = vkr_dispatch_vkCmdDrawMultiEXT;
+   dispatch->dispatch_vkCmdDrawMultiIndexedEXT = vkr_dispatch_vkCmdDrawMultiIndexedEXT;
+
+   /* VK_KHR_push_descriptor */
+   dispatch->dispatch_vkCmdPushDescriptorSetKHR = vkr_dispatch_vkCmdPushDescriptorSetKHR;
+   dispatch->dispatch_vkCmdPushDescriptorSetWithTemplateKHR = NULL;
 }
