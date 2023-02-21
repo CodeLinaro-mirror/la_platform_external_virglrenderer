@@ -41,6 +41,10 @@
 #include "vrend_tweaks.h"
 #include "virgl_util.h"
 
+#ifdef ENABLE_VIDEO
+#include "vrend_video.h"
+#endif
+
 /* decode side */
 #define DECODE_MAX_TOKENS 8000
 
@@ -229,8 +233,7 @@ static int vrend_decode_clear_texture(struct vrend_context *ctx, const uint32_t 
    arr[2] = get_buf_entry(buf, VIRGL_TEXTURE_ARRAY_C);
    arr[3] = get_buf_entry(buf, VIRGL_TEXTURE_ARRAY_D);
 
-   vrend_clear_texture(ctx, handle, level, &box, (void *) &arr);
-   return 0;
+   return vrend_clear_texture(ctx, handle, level, &box, (void *) &arr);
 }
 
 static int vrend_decode_set_viewport_state(struct vrend_context *ctx, const uint32_t *buf, uint32_t length)
@@ -669,6 +672,7 @@ static int vrend_decode_create_sampler_state(struct vrend_context *ctx, const ui
    state.compare_func = (tmp >> 16) & 0x7;
    state.seamless_cube_map = (tmp >> 19) & 0x1;
    state.max_anisotropy = (float)((tmp >> 20) & 0x3f);
+   state.normalized_coords = 0;
 
    state.lod_bias = uif(get_buf_entry(buf, VIRGL_OBJ_SAMPLER_STATE_LOD_BIAS));
    state.min_lod = uif(get_buf_entry(buf, VIRGL_OBJ_SAMPLER_STATE_MIN_LOD));
@@ -1168,7 +1172,7 @@ static int vrend_decode_link_shader(struct vrend_context *ctx, const uint32_t *b
    handles[PIPE_SHADER_TESS_EVAL] = get_buf_entry(buf, VIRGL_LINK_SHADER_TESS_EVAL_HANDLE);
    handles[PIPE_SHADER_COMPUTE] = get_buf_entry(buf, VIRGL_LINK_SHADER_COMPUTE_HANDLE);
 
-   vrend_link_program(ctx, handles);
+   vrend_link_program_hook(ctx, handles);
    return 0;
 }
 
@@ -1628,6 +1632,187 @@ static int vrend_decode_send_string_marker(struct vrend_context *ctx, const uint
    return 0;
 }
 
+#ifdef ENABLE_VIDEO
+/* video codec related functions */
+
+static int vrend_decode_create_video_codec(struct vrend_context *ctx,
+                                           const uint32_t *buf,
+                                           uint32_t length)
+{
+   struct vrend_video_context *vctx = vrend_context_get_video_ctx(ctx);
+
+   if (length < VIRGL_CREATE_VIDEO_CODEC_MIN_SIZE)
+      return EINVAL;
+
+   uint32_t handle     = get_buf_entry(buf, VIRGL_CREATE_VIDEO_CODEC_HANDLE);
+   uint32_t profile    = get_buf_entry(buf, VIRGL_CREATE_VIDEO_CODEC_PROFILE);
+   uint32_t entrypoint = get_buf_entry(buf, VIRGL_CREATE_VIDEO_CODEC_ENTRYPOINT);
+   uint32_t chroma_fmt = get_buf_entry(buf, VIRGL_CREATE_VIDEO_CODEC_CHROMA_FMT);
+   uint32_t level      = get_buf_entry(buf, VIRGL_CREATE_VIDEO_CODEC_LEVEL);
+   uint32_t width      = get_buf_entry(buf, VIRGL_CREATE_VIDEO_CODEC_WIDTH);
+   uint32_t height     = get_buf_entry(buf, VIRGL_CREATE_VIDEO_CODEC_HEIGHT);
+   uint32_t max_ref    = 2; /* The max number of ref frames is 2 by default */
+
+   if (length >= VIRGL_CREATE_VIDEO_CODEC_MAX_REF)
+      max_ref = get_buf_entry(buf, VIRGL_CREATE_VIDEO_CODEC_MAX_REF);
+
+   vrend_video_create_codec(vctx, handle, profile, entrypoint,
+                            chroma_fmt, level, width, height, max_ref, 0);
+
+   return 0;
+}
+
+static int vrend_decode_destroy_video_codec(struct vrend_context *ctx,
+                                            const uint32_t *buf,
+                                            uint32_t length)
+{
+   struct vrend_video_context *vctx = vrend_context_get_video_ctx(ctx);
+
+    if (length < VIRGL_DESTROY_VIDEO_CODEC_MIN_SIZE)
+       return EINVAL;
+
+   uint32_t handle = get_buf_entry(buf, VIRGL_DESTROY_VIDEO_CODEC_HANDLE);
+   vrend_video_destroy_codec(vctx, handle);
+
+   return 0;
+}
+
+static int vrend_decode_create_video_buffer(struct vrend_context *ctx,
+                                            const uint32_t *buf,
+                                            uint32_t length)
+{
+   uint32_t i, num_res;
+   uint32_t res_handles[VREND_VIDEO_BUFFER_PLANE_NUM];
+   struct vrend_video_context *vctx = vrend_context_get_video_ctx(ctx);
+
+   if (length < VIRGL_CREATE_VIDEO_BUFFER_MIN_SIZE)
+      return EINVAL;
+
+   num_res = length - VIRGL_CREATE_VIDEO_BUFFER_RES_BASE + 1;
+   if (num_res > VREND_VIDEO_BUFFER_PLANE_NUM)
+       num_res = VREND_VIDEO_BUFFER_PLANE_NUM;
+
+   uint32_t handle = get_buf_entry(buf, VIRGL_CREATE_VIDEO_BUFFER_HANDLE);
+   uint32_t format = get_buf_entry(buf, VIRGL_CREATE_VIDEO_BUFFER_FORMAT);
+   uint32_t width  = get_buf_entry(buf, VIRGL_CREATE_VIDEO_BUFFER_WIDTH);
+   uint32_t height = get_buf_entry(buf, VIRGL_CREATE_VIDEO_BUFFER_HEIGHT);
+
+   memset(res_handles, 0, sizeof(res_handles));
+   for (i = 0; i < num_res; i++)
+       res_handles[i] = get_buf_entry(buf,
+                                      VIRGL_CREATE_VIDEO_BUFFER_RES_BASE + i);
+
+   vrend_video_create_buffer(vctx, handle, format, width, height,
+                                      res_handles, num_res);
+
+   return 0;
+}
+
+static int vrend_decode_destroy_video_buffer(struct vrend_context *ctx,
+                                             const uint32_t *buf,
+                                             uint32_t length)
+{
+   struct vrend_video_context *vctx = vrend_context_get_video_ctx(ctx);
+
+   if (length < VIRGL_DESTROY_VIDEO_BUFFER_MIN_SIZE)
+      return EINVAL;
+
+   uint32_t handle = get_buf_entry(buf, VIRGL_DESTROY_VIDEO_BUFFER_HANDLE);
+   vrend_video_destroy_buffer(vctx, handle);
+
+   return 0;
+}
+
+static int vrend_decode_begin_frame(struct vrend_context *ctx,
+                                    const uint32_t *buf,
+                                    uint32_t length)
+{
+   struct vrend_video_context *vctx = vrend_context_get_video_ctx(ctx);
+
+   if (length < VIRGL_BEGIN_FRAME_MIN_SIZE)
+      return EINVAL;
+
+   uint32_t cdc_handle = get_buf_entry(buf, VIRGL_BEGIN_FRAME_CDC_HANDLE);
+   uint32_t tgt_handle = get_buf_entry(buf, VIRGL_BEGIN_FRAME_TGT_HANDLE);
+   vrend_video_begin_frame(vctx, cdc_handle, tgt_handle);
+
+   return 0;
+}
+
+static int vrend_decode_decode_bitstream(struct vrend_context *ctx,
+                                         const uint32_t *buf,
+                                         uint32_t length)
+{
+   struct vrend_video_context *vctx = vrend_context_get_video_ctx(ctx);
+
+   if (length < VIRGL_DECODE_BS_MIN_SIZE)
+      return EINVAL;
+
+   uint32_t cdc_handle = get_buf_entry(buf, VIRGL_DECODE_BS_CDC_HANDLE);
+   uint32_t tgt_handle = get_buf_entry(buf, VIRGL_DECODE_BS_TGT_HANDLE);
+   uint32_t dsc_handle = get_buf_entry(buf, VIRGL_DECODE_BS_DSC_HANDLE);
+   uint32_t buf_handle = get_buf_entry(buf, VIRGL_DECODE_BS_BUF_HANDLE);
+   uint32_t buf_size   = get_buf_entry(buf, VIRGL_DECODE_BS_BUF_SIZE);
+
+   vrend_video_decode_bitstream(vctx, cdc_handle, tgt_handle,
+                                dsc_handle, 1, &buf_handle, &buf_size);
+
+   return 0;
+}
+
+static int vrend_decode_encode_bitstream(struct vrend_context *ctx,
+                                         const uint32_t *buf,
+                                         uint32_t length)
+{
+   struct vrend_video_context *vctx = vrend_context_get_video_ctx(ctx);
+
+   if (length < VIRGL_ENCODE_BS_MIN_SIZE)
+      return EINVAL;
+
+   uint32_t cdc_handle  = get_buf_entry(buf, VIRGL_ENCODE_BS_CDC_HANDLE);
+   uint32_t src_handle  = get_buf_entry(buf, VIRGL_ENCODE_BS_SRC_HANDLE);
+   uint32_t dest_handle = get_buf_entry(buf, VIRGL_ENCODE_BS_DEST_HANDLE);
+   uint32_t desc_handle = get_buf_entry(buf, VIRGL_ENCODE_BS_DESC_HANDLE);
+   uint32_t feed_handle = get_buf_entry(buf, VIRGL_ENCODE_BS_FEED_HANDLE);
+
+   vrend_video_encode_bitstream(vctx, cdc_handle, src_handle, dest_handle,
+                                desc_handle, feed_handle);
+
+   return 0;
+}
+
+static int vrend_decode_end_frame(struct vrend_context *ctx,
+                                  const uint32_t *buf,
+                                  uint32_t length)
+{
+   struct vrend_video_context *vctx = vrend_context_get_video_ctx(ctx);
+
+   if (length < VIRGL_END_FRAME_MIN_SIZE)
+      return EINVAL;
+
+   uint32_t cdc_handle = get_buf_entry(buf, VIRGL_END_FRAME_CDC_HANDLE);
+   uint32_t tgt_handle = get_buf_entry(buf, VIRGL_END_FRAME_TGT_HANDLE);
+
+   vrend_video_end_frame(vctx, cdc_handle, tgt_handle);
+
+   return 0;
+}
+
+#else
+
+static int vrend_unsupported(struct vrend_context *ctx,
+                                    const uint32_t *buf,
+                                    uint32_t length)
+{
+   (void)ctx;
+   (void)buf;
+   (void)length;
+   return EINVAL;
+}
+
+#endif /* ENABLE_VIDEO */
+
+
 typedef int (*vrend_decode_callback)(struct vrend_context *ctx, const uint32_t *buf, uint32_t length);
 
 static int vrend_decode_dummy(struct vrend_context *ctx, const uint32_t *buf, uint32_t length)
@@ -1692,6 +1877,27 @@ static const vrend_decode_callback decode_table[VIRGL_MAX_COMMANDS] = {
    [VIRGL_CCMD_GET_MEMORY_INFO] = vrend_decode_get_memory_info,
    [VIRGL_CCMD_SEND_STRING_MARKER] = vrend_decode_send_string_marker,
    [VIRGL_CCMD_LINK_SHADER] = vrend_decode_link_shader,
+#ifdef ENABLE_VIDEO
+   [VIRGL_CCMD_CREATE_VIDEO_CODEC] = vrend_decode_create_video_codec,
+   [VIRGL_CCMD_DESTROY_VIDEO_CODEC] = vrend_decode_destroy_video_codec,
+   [VIRGL_CCMD_CREATE_VIDEO_BUFFER] = vrend_decode_create_video_buffer,
+   [VIRGL_CCMD_DESTROY_VIDEO_BUFFER] = vrend_decode_destroy_video_buffer,
+   [VIRGL_CCMD_BEGIN_FRAME] = vrend_decode_begin_frame,
+   [VIRGL_CCMD_DECODE_MACROBLOCK] = vrend_decode_dummy,
+   [VIRGL_CCMD_DECODE_BITSTREAM] = vrend_decode_decode_bitstream,
+   [VIRGL_CCMD_ENCODE_BITSTREAM] = vrend_decode_encode_bitstream,
+   [VIRGL_CCMD_END_FRAME] = vrend_decode_end_frame,
+#else
+   [VIRGL_CCMD_CREATE_VIDEO_CODEC] = vrend_unsupported,
+   [VIRGL_CCMD_DESTROY_VIDEO_CODEC] = vrend_unsupported,
+   [VIRGL_CCMD_CREATE_VIDEO_BUFFER] = vrend_unsupported,
+   [VIRGL_CCMD_DESTROY_VIDEO_BUFFER] = vrend_unsupported,
+   [VIRGL_CCMD_BEGIN_FRAME] = vrend_unsupported,
+   [VIRGL_CCMD_DECODE_MACROBLOCK] = vrend_unsupported,
+   [VIRGL_CCMD_DECODE_BITSTREAM] = vrend_unsupported,
+   [VIRGL_CCMD_ENCODE_BITSTREAM] = vrend_unsupported,
+   [VIRGL_CCMD_END_FRAME] = vrend_unsupported,
+#endif
 };
 
 static int vrend_decode_ctx_submit_cmd(struct virgl_context *ctx,
@@ -1760,12 +1966,12 @@ static void vrend_decode_ctx_retire_fences(UNUSED struct virgl_context *ctx)
 
 static int vrend_decode_ctx_submit_fence(struct virgl_context *ctx,
                                          uint32_t flags,
-                                         uint64_t queue_id,
+                                         uint32_t ring_idx,
                                          uint64_t fence_id)
 {
    struct vrend_decode_ctx *dctx = (struct vrend_decode_ctx *)ctx;
 
-   if (queue_id)
+   if (ring_idx)
       return -EINVAL;
 
    return vrend_renderer_create_fence(dctx->grctx, flags, fence_id);

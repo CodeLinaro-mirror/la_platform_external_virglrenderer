@@ -62,6 +62,8 @@ struct vn_device_proc_table {
    PFN_vkCmdDrawIndirect CmdDrawIndirect;
    PFN_vkCmdDrawIndirectByteCountEXT CmdDrawIndirectByteCountEXT;
    PFN_vkCmdDrawIndirectCount CmdDrawIndirectCount;
+   PFN_vkCmdDrawMultiEXT CmdDrawMultiEXT;
+   PFN_vkCmdDrawMultiIndexedEXT CmdDrawMultiIndexedEXT;
    PFN_vkCmdEndConditionalRenderingEXT CmdEndConditionalRenderingEXT;
    PFN_vkCmdEndQuery CmdEndQuery;
    PFN_vkCmdEndQueryIndexedEXT CmdEndQueryIndexedEXT;
@@ -76,6 +78,8 @@ struct vn_device_proc_table {
    PFN_vkCmdPipelineBarrier CmdPipelineBarrier;
    PFN_vkCmdPipelineBarrier2 CmdPipelineBarrier2;
    PFN_vkCmdPushConstants CmdPushConstants;
+   PFN_vkCmdPushDescriptorSetKHR CmdPushDescriptorSetKHR;
+   PFN_vkCmdPushDescriptorSetWithTemplateKHR CmdPushDescriptorSetWithTemplateKHR;
    PFN_vkCmdResetEvent CmdResetEvent;
    PFN_vkCmdResetEvent2 CmdResetEvent2;
    PFN_vkCmdResetQueryPool CmdResetQueryPool;
@@ -197,7 +201,9 @@ struct vn_device_proc_table {
    PFN_vkGetQueryPoolResults GetQueryPoolResults;
    PFN_vkGetRenderAreaGranularity GetRenderAreaGranularity;
    PFN_vkGetSemaphoreCounterValue GetSemaphoreCounterValue;
+   PFN_vkGetSemaphoreFdKHR GetSemaphoreFdKHR;
    PFN_vkImportFenceFdKHR ImportFenceFdKHR;
+   PFN_vkImportSemaphoreFdKHR ImportSemaphoreFdKHR;
    PFN_vkInvalidateMappedMemoryRanges InvalidateMappedMemoryRanges;
    PFN_vkMapMemory MapMemory;
    PFN_vkMergePipelineCaches MergePipelineCaches;
@@ -336,6 +342,12 @@ vn_util_init_device_proc_table(VkDevice dev,
       api_version >= VK_API_VERSION_1_2 ? VN_GDPA(dev, vkCmdDrawIndirectCount) :
       ext_table->KHR_draw_indirect_count ? VN_GDPA(dev, vkCmdDrawIndirectCountKHR) :
       NULL;
+   proc_table->CmdDrawMultiEXT =
+      ext_table->EXT_multi_draw ? VN_GDPA(dev, vkCmdDrawMultiEXT) :
+      NULL;
+   proc_table->CmdDrawMultiIndexedEXT =
+      ext_table->EXT_multi_draw ? VN_GDPA(dev, vkCmdDrawMultiIndexedEXT) :
+      NULL;
    proc_table->CmdEndConditionalRenderingEXT =
       ext_table->EXT_conditional_rendering ? VN_GDPA(dev, vkCmdEndConditionalRenderingEXT) :
       NULL;
@@ -368,6 +380,12 @@ vn_util_init_device_proc_table(VkDevice dev,
       ext_table->KHR_synchronization2 ? VN_GDPA(dev, vkCmdPipelineBarrier2KHR) :
       NULL;
    proc_table->CmdPushConstants = VN_GDPA(dev, vkCmdPushConstants);
+   proc_table->CmdPushDescriptorSetKHR =
+      ext_table->KHR_push_descriptor ? VN_GDPA(dev, vkCmdPushDescriptorSetKHR) :
+      NULL;
+   proc_table->CmdPushDescriptorSetWithTemplateKHR =
+      ext_table->KHR_push_descriptor ? VN_GDPA(dev, vkCmdPushDescriptorSetWithTemplateKHR) :
+      NULL;
    proc_table->CmdResetEvent = VN_GDPA(dev, vkCmdResetEvent);
    proc_table->CmdResetEvent2 =
       api_version >= VK_API_VERSION_1_3 ? VN_GDPA(dev, vkCmdResetEvent2) :
@@ -627,8 +645,14 @@ vn_util_init_device_proc_table(VkDevice dev,
       api_version >= VK_API_VERSION_1_2 ? VN_GDPA(dev, vkGetSemaphoreCounterValue) :
       ext_table->KHR_timeline_semaphore ? VN_GDPA(dev, vkGetSemaphoreCounterValueKHR) :
       NULL;
+   proc_table->GetSemaphoreFdKHR =
+      ext_table->KHR_external_semaphore_fd ? VN_GDPA(dev, vkGetSemaphoreFdKHR) :
+      NULL;
    proc_table->ImportFenceFdKHR =
       ext_table->KHR_external_fence_fd ? VN_GDPA(dev, vkImportFenceFdKHR) :
+      NULL;
+   proc_table->ImportSemaphoreFdKHR =
+      ext_table->KHR_external_semaphore_fd ? VN_GDPA(dev, vkImportSemaphoreFdKHR) :
       NULL;
    proc_table->InvalidateMappedMemoryRanges = VN_GDPA(dev, vkInvalidateMappedMemoryRanges);
    proc_table->MapMemory = VN_GDPA(dev, vkMapMemory);

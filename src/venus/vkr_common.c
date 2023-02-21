@@ -71,45 +71,56 @@ static const struct vn_info_extension_table vkr_extension_table = {
    .KHR_dynamic_rendering = true,
    .KHR_format_feature_flags2 = false,
    .KHR_maintenance4 = true,
-   .KHR_shader_integer_dot_product = false,
-   .KHR_shader_non_semantic_info = false,
-   .KHR_shader_terminate_invocation = false,
-   .KHR_synchronization2 = false,
-   .KHR_zero_initialize_workgroup_memory = false,
+   .KHR_shader_integer_dot_product = true,
+   .KHR_shader_non_semantic_info = true,
+   .KHR_shader_terminate_invocation = true,
+   .KHR_synchronization2 = true,
+   .KHR_zero_initialize_workgroup_memory = true,
    .EXT_4444_formats = true,
    .EXT_extended_dynamic_state = true,
    .EXT_extended_dynamic_state2 = true,
    .EXT_image_robustness = true,
    .EXT_inline_uniform_block = true,
-   .EXT_pipeline_creation_cache_control = false,
-   .EXT_pipeline_creation_feedback = false,
-   .EXT_private_data = false,
+   .EXT_pipeline_creation_cache_control = true,
+   .EXT_pipeline_creation_feedback = true,
+   /* TODO(VK_EXT_private_data): Support natively in the guest */
+   .EXT_private_data = true,
    .EXT_shader_demote_to_helper_invocation = true,
-   .EXT_subgroup_size_control = false,
-   .EXT_texel_buffer_alignment = false,
-   .EXT_texture_compression_astc_hdr = false,
-   .EXT_tooling_info = false,
-   .EXT_ycbcr_2plane_444_formats = false,
+   .EXT_subgroup_size_control = true,
+   .EXT_texel_buffer_alignment = true,
+   .EXT_texture_compression_astc_hdr = true,
+   .EXT_tooling_info = false, /* implementation in driver */
+   .EXT_ycbcr_2plane_444_formats = true,
    /* KHR extensions */
-   .KHR_external_fence_fd = false,
+   .KHR_external_fence_fd = true,
    .KHR_external_memory_fd = true,
+   .KHR_external_semaphore_fd = true,
+   .KHR_push_descriptor = true,
    /* EXT extensions */
    .EXT_calibrated_timestamps = true,
    .EXT_conservative_rasterization = true,
    .EXT_conditional_rendering = true,
    .EXT_custom_border_color = true,
+   .EXT_depth_clip_control = true,
    .EXT_depth_clip_enable = true,
    .EXT_external_memory_dma_buf = true,
    .EXT_image_drm_format_modifier = true,
    .EXT_image_view_min_lod = true,
    .EXT_index_type_uint8 = true,
    .EXT_line_rasterization = true,
+   .EXT_multi_draw = true,
+   .EXT_mutable_descriptor_type = true,
+   .EXT_pci_bus_info = true,
+   .EXT_primitive_topology_list_restart = true,
+   .EXT_primitives_generated_query = true,
    .EXT_provoking_vertex = true,
    .EXT_queue_family_foreign = true,
    .EXT_robustness2 = true,
    .EXT_shader_stencil_export = true,
    .EXT_transform_feedback = true,
    .EXT_vertex_attribute_divisor = true,
+   /* vendor extensions */
+   .VALVE_mutable_descriptor_type = true,
 };
 
 void
@@ -219,5 +230,5 @@ object_array_init(struct vkr_context *ctx,
       arr->objects[i] = obj;
    }
 
-   return arr;
+   return true;
 }

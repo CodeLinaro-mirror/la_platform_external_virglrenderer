@@ -78,7 +78,7 @@ struct virgl_renderer_callbacks {
    int (*get_drm_fd)(void *cookie);
 
 #ifdef VIRGL_RENDERER_UNSTABLE_APIS
-   void (*write_context_fence)(void *cookie, uint32_t ctx_id, uint64_t queue_id, uint64_t fence_id);
+   void (*write_context_fence)(void *cookie, uint32_t ctx_id, uint32_t ring_idx, uint64_t fence_id);
 
    /* version 0: a connected socket of type SOCK_SEQPACKET */
    int (*get_server_fd)(void *cookie, uint32_t version);
@@ -139,6 +139,10 @@ struct virgl_renderer_callbacks {
  * Enable drm renderer.
  */
 #define VIRGL_RENDERER_DRM           (1 << 10)
+
+/* Video encode/decode */
+#define VIRGL_RENDERER_USE_VIDEO     (1 << 11)
+
 
 #endif /* VIRGL_RENDERER_UNSTABLE_APIS */
 
@@ -308,12 +312,6 @@ VIRGL_EXPORT int virgl_renderer_get_poll_fd(void);
 
 VIRGL_EXPORT int virgl_renderer_execute(void *execute_args, uint32_t execute_size);
 
-/*
- * These are unstable APIs for development only. Use these for development/testing purposes
- * only, not in production
- */
-#ifdef VIRGL_RENDERER_UNSTABLE_APIS
-
 #define VIRGL_RENDERER_CONTEXT_FLAG_CAPSET_ID_MASK 0xff
 
 VIRGL_EXPORT int virgl_renderer_context_create_with_flags(uint32_t ctx_id,
@@ -364,6 +362,12 @@ VIRGL_EXPORT int virgl_renderer_resource_get_map_info(uint32_t res_handle, uint3
 VIRGL_EXPORT int
 virgl_renderer_resource_export_blob(uint32_t res_id, uint32_t *fd_type, int *fd);
 
+/*
+ * These are unstable APIs for development only. Use these for development/testing purposes
+ * only, not in production
+ */
+#ifdef VIRGL_RENDERER_UNSTABLE_APIS
+
 struct virgl_renderer_resource_import_blob_args
 {
    uint32_t res_handle;
@@ -382,7 +386,7 @@ virgl_renderer_export_fence(uint32_t client_fence_id, int *fd);
 #define VIRGL_RENDERER_FENCE_FLAG_MERGEABLE      (1 << 0)
 VIRGL_EXPORT int virgl_renderer_context_create_fence(uint32_t ctx_id,
                                                      uint32_t flags,
-                                                     uint64_t queue_id,
+                                                     uint32_t ring_idx,
                                                      uint64_t fence_id);
 VIRGL_EXPORT void virgl_renderer_context_poll(uint32_t ctx_id); /* force fences */
 VIRGL_EXPORT int virgl_renderer_context_get_poll_fd(uint32_t ctx_id);

@@ -166,15 +166,24 @@ void vrend_winsys_destroy_context(virgl_renderer_gl_context ctx)
 
 int vrend_winsys_make_context_current(virgl_renderer_gl_context ctx)
 {
+   int ret = -1;
 #ifdef HAVE_EPOXY_EGL_H
-   if (use_context == CONTEXT_EGL)
-      return virgl_egl_make_context_current(egl, ctx);
+   if (use_context == CONTEXT_EGL) {
+      ret = virgl_egl_make_context_current(egl, ctx);
+      if (ret)
+         vrend_printf("%s: Error switching context: %s\n",
+                      __func__, virgl_egl_error_string(eglGetError()));
+   }
 #endif
 #ifdef HAVE_EPOXY_GLX_H
-   if (use_context == CONTEXT_GLX)
-      return virgl_glx_make_context_current(glx_info, ctx);
+   if (use_context == CONTEXT_GLX) {
+      ret = virgl_glx_make_context_current(glx_info, ctx);
+      if (ret)
+         vrend_printf("%s: Error switching context\n", __func__);
+   }
 #endif
-   return -1;
+   assert(!ret && "Failed to switch GL context");
+   return ret;
 }
 
 int vrend_winsys_has_gl_colorspace(void)
@@ -186,7 +195,8 @@ int vrend_winsys_has_gl_colorspace(void)
 #endif
    return use_context == CONTEXT_NONE ||
          use_context == CONTEXT_GLX ||
-         (use_context == CONTEXT_EGL && egl_colorspace);
+         (use_context == CONTEXT_EGL && egl_colorspace) ||
+         (use_context == CONTEXT_EGL_EXTERNAL && egl_colorspace);
 }
 
 int vrend_winsys_get_fourcc_for_texture(uint32_t tex_id, uint32_t format, int *fourcc)

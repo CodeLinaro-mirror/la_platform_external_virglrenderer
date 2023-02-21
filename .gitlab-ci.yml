@@ -1,6 +1,6 @@
 variables:
   FDO_UPSTREAM_REPO: "virgl/virglrenderer"
-  MESA_TEMPLATES_COMMIT: &ci-templates-commit 290b79e0e78eab67a83766f4e9691be554fc4afd
+  MESA_TEMPLATES_COMMIT: &ci-templates-commit d5aa3941aa03c2f716595116354fb81eb8012acb
   MESA_BASE_TAG: ${DEBIAN_BASE_TAG}
   #
   # IMPORTANT!
@@ -11,12 +11,17 @@ variables:
   #
   # Pick a pipeline on https://gitlab.freedesktop.org/mesa/mesa/-/pipelines/
   #
-  MESA_PIPELINE_ID: 634658
+  MESA_PIPELINE_ID: 743439
   MESA_PROJECT_PATH: mesa/mesa
-  MINIO_HOST: minio-packet.freedesktop.org
-  # Per-pipeline artifact storage on MinIO
-  PIPELINE_ARTIFACTS_BASE: ${MINIO_HOST}/artifacts/${CI_PROJECT_PATH}/${CI_PIPELINE_ID}
+  STORAGE_HOST: s3.freedesktop.org
   CI_REGISTRY_IMAGE: "registry.freedesktop.org/${MESA_PROJECT_PATH}"
+  # per-pipeline artifact storage on MinIO
+  PIPELINE_ARTIFACTS_BASE: ${STORAGE_HOST}/artifacts/${CI_PROJECT_PATH}/${CI_PIPELINE_ID}
+  # per-job artifact storage on MinIO
+  JOB_ARTIFACTS_BASE: ${PIPELINE_ARTIFACTS_BASE}/${CI_JOB_ID}
+  # reference images stored for traces
+  PIGLIT_REPLAY_REFERENCE_IMAGES_BASE: "${STORAGE_HOST}/mesa-tracie-results/${FDO_UPSTREAM_REPO}"
+
 
 include:
   - project: 'freedesktop/ci-templates'
@@ -32,7 +37,7 @@ include:
     # IMPORTANT: Use a recent Mesa Git revision
     # The commit ref must be in sync with the pipeline picked above
     # It can be found on the pipeline page below the commit message
-    ref: 27c57b86500ce48154533d78b74350c31152b2f3
+    ref: 1ec172646cd7f5b8c04173a6b45a871aa48aa12e
     file:
       - '/.gitlab-ci/image-tags.yml'
 
@@ -134,7 +139,6 @@ make check venus:
   extends: .make_check_base
   variables:
     TEST_SUITE: make-check-venus
-    EXTRA_OPTION: "-D venus-experimental=true"
 
 #
 # Piglit & dEQP test jobs
@@ -145,9 +149,12 @@ make check venus:
   extends:
     - .set-image-base-tag
   before_script:
+    - echo -n "${CI_JOB_JWT}" > "${CI_JOB_JWT_FILE}"
+    - unset CI_JOB_JWT
     - export CI_JOB_NAME_SANITIZED="$(echo $CI_JOB_NAME | tr ' /' '--')"
   variables:
-    MESA_IMAGE_PATH: ${DEBIAN_X86_TEST_IMAGE_PATH}
+    CI_JOB_JWT_FILE: /minio_jwt
+    MESA_IMAGE_PATH: ${DEBIAN_X86_TEST_IMAGE_GL_PATH}
     MESA_IMAGE_TAG: ${DEBIAN_X86_TEST_GL_TAG}
   script:
     - export DEQP_RESULTS_DIR="results/${CI_JOB_NAME_SANITIZED}"
@@ -155,6 +162,37 @@ make check venus:
     - .gitlab-ci/container/debian/x86_test.sh
   artifacts:
     name: "virgl-result"
+    when: always
+    paths:
+      - results/
+    reports:
+      junit: results/junit.xml
+  needs:
+    - job: debian/x86_build
+      artifacts: true
+  rules:
+    - if: *is-post-merge
+      when: never
+    - when: on_success
+
+.use-vk-test-image:
+  stage: test
+  extends:
+    - .set-image-base-tag
+  before_script:
+    - echo -n "${CI_JOB_JWT}" > "${CI_JOB_JWT_FILE}"
+    - unset CI_JOB_JWT
+    - export CI_JOB_NAME_SANITIZED="$(echo $CI_JOB_NAME | tr ' /' '--')"
+  variables:
+    CI_JOB_JWT_FILE: /minio_jwt
+    MESA_IMAGE_PATH: ${DEBIAN_X86_TEST_IMAGE_VK_PATH}
+    MESA_IMAGE_TAG: ${DEBIAN_X86_TEST_VK_TAG}
+  script:
+    - export DEQP_RESULTS_DIR="results/${CI_JOB_NAME_SANITIZED}"
+    - export PIGLIT_RESULTS_DIR="results/${CI_JOB_NAME_SANITIZED}"
+    - .gitlab-ci/container/debian/x86_test.sh
+  artifacts:
+    name: "venus-result"
     when: always
     paths:
       - results/
@@ -276,3 +314,36 @@ piglit-gles-virt:
     VIRGL_HOST_API: GLES
     GPU_VERSION: virgl-gles
     CROSVM_GPU_ARGS: *deqp-gles-crosvm-gpu-args
+
+virgl-traces:
+  extends:
+    - .piglit-virt
+  variables:
+    GPU_VERSION: virgl-gl
+    CROSVM_GPU_ARGS: *deqp-gl-crosvm-gpu-args
+    EGL_PLATFORM: "surfaceless"
+    PIGLIT_REPLAY_DESCRIPTION_FILE: "${CI_PROJECT_DIR}/install/traces-virgl.yml"
+    PIGLIT_REPLAY_DEVICE_NAME: "gl-virgl"
+    PIGLIT_RESULTS: "virgl-replay"
+
+.venus-lavapipe-test:
+  extends:
+    - .use-vk-test-image
+  variables:
+    VK_DRIVER: virtio
+    CROSVM_GALLIUM_DRIVER: "llvmpipe"
+    CROSVM_VK_DRIVER: "lvp"
+
+venus-lavapipe:
+  extends:
+    - .venus-lavapipe-test
+  variables:
+    DEQP_FRACTION: 15
+    DEQP_SUITE: venus
+    GPU_VERSION: venus
+    LP_NUM_THREADS: 1 # There will be FDO_CI_CONCURRENT Crosvm processes, so each should use a single thread
+    FDO_CI_CONCURRENT: 32 # Seems to be the fastest value, more gets actually slower
+    CROSVM_MEMORY: 3072
+    CROSVM_GPU_ARGS: "vulkan=true,gles=false,backend=virglrenderer,egl=true,surfaceless=true"
+  tags:
+    - mesa-swrast
