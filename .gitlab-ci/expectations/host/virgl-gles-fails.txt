@@ -11,8 +11,6 @@ dEQP-GLES31.functional.shaders.sample_variables.sample_mask_in.bit_count_per_two
 dEQP-GLES31.functional.shaders.sample_variables.sample_mask_in.bit_count_per_two_samples.multisample_texture_2,Fail
 dEQP-GLES3.functional.clipping.line.wide_line_clip_viewport_center,Fail
 dEQP-GLES3.functional.clipping.line.wide_line_clip_viewport_corner,Fail
-dEQP-GLES3.functional.draw_buffers_indexed.random.max_implementation_draw_buffers.8,Fail
-dEQP-GLES3.functional.draw_buffers_indexed.random.max_required_draw_buffers.9,Fail
 dEQP-GLES3.functional.fbo.blit.rect.nearest_consistency_mag,Fail
 dEQP-GLES3.functional.fbo.blit.rect.nearest_consistency_mag_reverse_dst_x,Fail
 dEQP-GLES3.functional.fbo.blit.rect.nearest_consistency_mag_reverse_src_dst_x,Fail
@@ -195,14 +193,17 @@ spec@arb_depth_texture@texwrap formats bordercolor-swizzled@GL_DEPTH_COMPONENT32
 spec@arb_draw_indirect@arb_draw_indirect-draw-elements-prim-restart-ugly,Fail
 spec@arb_enhanced_layouts@linker@component-layout@intrastage-vs,Fail
 spec@arb_enhanced_layouts@linker@component-layout@vs-to-fs,Fail
+spec@arb_enhanced_layouts@matching_basic_types_3_loc_1,Fail
+spec@arb_enhanced_layouts@matching_fp64_types_1,Crash
+spec@arb_enhanced_layouts@matching_fp64_types_1_loc_1,Fail
+spec@arb_enhanced_layouts@matching_fp64_types_2,Crash
+spec@arb_enhanced_layouts@matching_fp64_types_2_loc_1,Fail
+spec@arb_enhanced_layouts@matching_fp64_types_3,Crash
+spec@arb_enhanced_layouts@matching_fp64_types_3_loc_1,Fail
 spec@arb_es2_compatibility@texwrap formats bordercolor,Fail
 spec@arb_es2_compatibility@texwrap formats bordercolor@GL_RGB565- border color only,Fail
 spec@arb_es2_compatibility@texwrap formats bordercolor-swizzled,Fail
 spec@arb_es2_compatibility@texwrap formats bordercolor-swizzled@GL_RGB565- swizzled- border color only,Fail
-spec@arb_framebuffer_no_attachments@arb_framebuffer_no_attachments-atomic@Basic,Fail
-spec@arb_framebuffer_no_attachments@arb_framebuffer_no_attachments-atomic,Fail
-spec@arb_framebuffer_no_attachments@arb_framebuffer_no_attachments-atomic@MS4,Fail
-spec@arb_framebuffer_no_attachments@arb_framebuffer_no_attachments-atomic@Per-sample,Fail
 spec@arb_framebuffer_no_attachments@arb_framebuffer_no_attachments-query@Basic,Fail
 spec@arb_framebuffer_no_attachments@arb_framebuffer_no_attachments-query@discard,Fail
 spec@arb_framebuffer_no_attachments@arb_framebuffer_no_attachments-query,Fail
@@ -262,137 +263,10 @@ spec@arb_sample_shading@samplemask 4@noms mask_in_one,Fail
 spec@arb_sample_shading@samplemask 4@noms partition,Fail
 spec@arb_sample_shading@samplemask 4@sample mask_in_one,Fail
 spec@arb_seamless_cube_map@arb_seamless_cubemap,Fail
-spec@arb_shader_atomic_counters@fragment-discard,Fail
 spec@arb_shader_image_load_store@early-z,ExpectedFail
 spec@arb_shader_image_load_store@early-z@occlusion query test/early-z pass,ExpectedFail
 spec@arb_shader_image_load_store@early-z@occlusion query test/late-z pass,Fail
 spec@arb_shader_image_load_store@execution@disable_early_z,Fail
-spec@arb_shader_image_load_store@host-mem-barrier@Atomic counter/RaW/full barrier test/16x16,Fail
-spec@arb_shader_image_load_store@host-mem-barrier@Atomic counter/RaW/full barrier test/4x4,Fail
-spec@arb_shader_image_load_store@host-mem-barrier@Atomic counter/RaW/full barrier test/64x64,Fail
-spec@arb_shader_image_load_store@host-mem-barrier@Atomic counter/RaW/one bit barrier test/16x16,Fail
-spec@arb_shader_image_load_store@host-mem-barrier@Atomic counter/RaW/one bit barrier test/4x4,Fail
-spec@arb_shader_image_load_store@host-mem-barrier@Atomic counter/RaW/one bit barrier test/64x64,Fail
-spec@arb_shader_image_load_store@host-mem-barrier@Atomic counter/WaR/full barrier test/16x16,Fail
-spec@arb_shader_image_load_store@host-mem-barrier@Atomic counter/WaR/full barrier test/4x4,Fail
-spec@arb_shader_image_load_store@host-mem-barrier@Atomic counter/WaR/full barrier test/64x64,Fail
-spec@arb_shader_image_load_store@host-mem-barrier@Atomic counter/WaR/one bit barrier test/16x16,Fail
-spec@arb_shader_image_load_store@host-mem-barrier@Atomic counter/WaR/one bit barrier test/4x4,Fail
-spec@arb_shader_image_load_store@host-mem-barrier@Atomic counter/WaR/one bit barrier test/64x64,Fail
-spec@arb_shader_image_load_store@host-mem-barrier@Buffer update/RaW/full barrier test/16x16,Fail
-spec@arb_shader_image_load_store@host-mem-barrier@Buffer update/RaW/full barrier test/4x4,Fail
-spec@arb_shader_image_load_store@host-mem-barrier@Buffer update/RaW/full barrier test/64x64,Fail
-spec@arb_shader_image_load_store@host-mem-barrier@Buffer update/RaW/one bit barrier test/16x16,Fail
-spec@arb_shader_image_load_store@host-mem-barrier@Buffer update/RaW/one bit barrier test/4x4,Fail
-spec@arb_shader_image_load_store@host-mem-barrier@Buffer update/RaW/one bit barrier test/64x64,Fail
-spec@arb_shader_image_load_store@host-mem-barrier@Buffer update/WaW/full barrier test/16x16,Fail
-spec@arb_shader_image_load_store@host-mem-barrier@Buffer update/WaW/full barrier test/4x4,Fail
-spec@arb_shader_image_load_store@host-mem-barrier@Buffer update/WaW/full barrier test/64x64,Fail
-spec@arb_shader_image_load_store@host-mem-barrier@Buffer update/WaW/one bit barrier test/16x16,Fail
-spec@arb_shader_image_load_store@host-mem-barrier@Buffer update/WaW/one bit barrier test/4x4,Fail
-spec@arb_shader_image_load_store@host-mem-barrier@Buffer update/WaW/one bit barrier test/64x64,Fail
-spec@arb_shader_image_load_store@host-mem-barrier@Element array/RaW/full barrier test/16x16,Fail
-spec@arb_shader_image_load_store@host-mem-barrier@Element array/RaW/full barrier test/4x4,Fail
-spec@arb_shader_image_load_store@host-mem-barrier@Element array/RaW/full barrier test/64x64,Fail
-spec@arb_shader_image_load_store@host-mem-barrier@Element array/RaW/one bit barrier test/16x16,Fail
-spec@arb_shader_image_load_store@host-mem-barrier@Element array/RaW/one bit barrier test/64x64,Fail
-spec@arb_shader_image_load_store@host-mem-barrier,Fail
-spec@arb_shader_image_load_store@host-mem-barrier@Framebuffer/RaW/full barrier test/16x16,Fail
-spec@arb_shader_image_load_store@host-mem-barrier@Framebuffer/RaW/full barrier test/4x4,Fail
-spec@arb_shader_image_load_store@host-mem-barrier@Framebuffer/RaW/full barrier test/64x64,Fail
-spec@arb_shader_image_load_store@host-mem-barrier@Framebuffer/RaW/one bit barrier test/16x16,Fail
-spec@arb_shader_image_load_store@host-mem-barrier@Framebuffer/RaW/one bit barrier test/4x4,Fail
-spec@arb_shader_image_load_store@host-mem-barrier@Framebuffer/RaW/one bit barrier test/64x64,Fail
-spec@arb_shader_image_load_store@host-mem-barrier@Framebuffer/WaW/full barrier test/16x16,Fail
-spec@arb_shader_image_load_store@host-mem-barrier@Framebuffer/WaW/full barrier test/4x4,Fail
-spec@arb_shader_image_load_store@host-mem-barrier@Framebuffer/WaW/full barrier test/64x64,Fail
-spec@arb_shader_image_load_store@host-mem-barrier@Framebuffer/WaW/one bit barrier test/16x16,Fail
-spec@arb_shader_image_load_store@host-mem-barrier@Framebuffer/WaW/one bit barrier test/4x4,Fail
-spec@arb_shader_image_load_store@host-mem-barrier@Framebuffer/WaW/one bit barrier test/64x64,Fail
-spec@arb_shader_image_load_store@host-mem-barrier@Image/RaW/full barrier test/16x16,Fail
-spec@arb_shader_image_load_store@host-mem-barrier@Image/RaW/full barrier test/4x4,Fail
-spec@arb_shader_image_load_store@host-mem-barrier@Image/RaW/full barrier test/64x64,Fail
-spec@arb_shader_image_load_store@host-mem-barrier@Image/RaW/one bit barrier test/16x16,Fail
-spec@arb_shader_image_load_store@host-mem-barrier@Image/RaW/one bit barrier test/4x4,Fail
-spec@arb_shader_image_load_store@host-mem-barrier@Image/RaW/one bit barrier test/64x64,Fail
-spec@arb_shader_image_load_store@host-mem-barrier@Image/WaR/full barrier test/16x16,Fail
-spec@arb_shader_image_load_store@host-mem-barrier@Image/WaR/full barrier test/4x4,Fail
-spec@arb_shader_image_load_store@host-mem-barrier@Image/WaR/full barrier test/64x64,Fail
-spec@arb_shader_image_load_store@host-mem-barrier@Image/WaR/one bit barrier test/16x16,Fail
-spec@arb_shader_image_load_store@host-mem-barrier@Image/WaR/one bit barrier test/4x4,Fail
-spec@arb_shader_image_load_store@host-mem-barrier@Image/WaR/one bit barrier test/64x64,Fail
-spec@arb_shader_image_load_store@host-mem-barrier@Indirect/RaW/full barrier test/16x16,Fail
-spec@arb_shader_image_load_store@host-mem-barrier@Indirect/RaW/full barrier test/4x4,Fail
-spec@arb_shader_image_load_store@host-mem-barrier@Indirect/RaW/full barrier test/64x64,Fail
-spec@arb_shader_image_load_store@host-mem-barrier@Indirect/RaW/one bit barrier test/16x16,Fail
-spec@arb_shader_image_load_store@host-mem-barrier@Indirect/RaW/one bit barrier test/4x4,Fail
-spec@arb_shader_image_load_store@host-mem-barrier@Indirect/RaW/one bit barrier test/64x64,Fail
-spec@arb_shader_image_load_store@host-mem-barrier@Pixel/RaW/full barrier test/16x16,Fail
-spec@arb_shader_image_load_store@host-mem-barrier@Pixel/RaW/full barrier test/4x4,Fail
-spec@arb_shader_image_load_store@host-mem-barrier@Pixel/RaW/full barrier test/64x64,Fail
-spec@arb_shader_image_load_store@host-mem-barrier@Pixel/RaW/one bit barrier test/16x16,Fail
-spec@arb_shader_image_load_store@host-mem-barrier@Pixel/RaW/one bit barrier test/4x4,Fail
-spec@arb_shader_image_load_store@host-mem-barrier@Pixel/RaW/one bit barrier test/64x64,Fail
-spec@arb_shader_image_load_store@host-mem-barrier@Texture fetch/RaW/full barrier test/16x16,Fail
-spec@arb_shader_image_load_store@host-mem-barrier@Texture fetch/RaW/full barrier test/4x4,Fail
-spec@arb_shader_image_load_store@host-mem-barrier@Texture fetch/RaW/full barrier test/64x64,Fail
-spec@arb_shader_image_load_store@host-mem-barrier@Texture fetch/RaW/one bit barrier test/16x16,Fail
-spec@arb_shader_image_load_store@host-mem-barrier@Texture fetch/RaW/one bit barrier test/64x64,Fail
-spec@arb_shader_image_load_store@host-mem-barrier@Texture update/RaW/full barrier test/16x16,Fail
-spec@arb_shader_image_load_store@host-mem-barrier@Texture update/RaW/full barrier test/4x4,Fail
-spec@arb_shader_image_load_store@host-mem-barrier@Texture update/RaW/full barrier test/64x64,Fail
-spec@arb_shader_image_load_store@host-mem-barrier@Texture update/RaW/one bit barrier test/16x16,Fail
-spec@arb_shader_image_load_store@host-mem-barrier@Texture update/RaW/one bit barrier test/4x4,Fail
-spec@arb_shader_image_load_store@host-mem-barrier@Texture update/RaW/one bit barrier test/64x64,Fail
-spec@arb_shader_image_load_store@host-mem-barrier@Texture update/WaW/full barrier test/16x16,Fail
-spec@arb_shader_image_load_store@host-mem-barrier@Texture update/WaW/full barrier test/4x4,Fail
-spec@arb_shader_image_load_store@host-mem-barrier@Texture update/WaW/full barrier test/64x64,Fail
-spec@arb_shader_image_load_store@host-mem-barrier@Texture update/WaW/one bit barrier test/16x16,Fail
-spec@arb_shader_image_load_store@host-mem-barrier@Texture update/WaW/one bit barrier test/4x4,Fail
-spec@arb_shader_image_load_store@host-mem-barrier@Texture update/WaW/one bit barrier test/64x64,Fail
-spec@arb_shader_image_load_store@host-mem-barrier@Transform feedback/WaW/full barrier test/16x16,Fail
-spec@arb_shader_image_load_store@host-mem-barrier@Transform feedback/WaW/full barrier test/4x4,Fail
-spec@arb_shader_image_load_store@host-mem-barrier@Transform feedback/WaW/full barrier test/64x64,Fail
-spec@arb_shader_image_load_store@host-mem-barrier@Transform feedback/WaW/one bit barrier test/16x16,Fail
-spec@arb_shader_image_load_store@host-mem-barrier@Transform feedback/WaW/one bit barrier test/4x4,Fail
-spec@arb_shader_image_load_store@host-mem-barrier@Transform feedback/WaW/one bit barrier test/64x64,Fail
-spec@arb_shader_image_load_store@host-mem-barrier@Uniform buffer/RaW/full barrier test/16x16,Fail
-spec@arb_shader_image_load_store@host-mem-barrier@Uniform buffer/RaW/full barrier test/4x4,Fail
-spec@arb_shader_image_load_store@host-mem-barrier@Uniform buffer/RaW/full barrier test/64x64,Fail
-spec@arb_shader_image_load_store@host-mem-barrier@Uniform buffer/RaW/one bit barrier test/16x16,Fail
-spec@arb_shader_image_load_store@host-mem-barrier@Uniform buffer/RaW/one bit barrier test/64x64,Fail
-spec@arb_shader_image_load_store@host-mem-barrier@Vertex array/RaW/full barrier test/16x16,Fail
-spec@arb_shader_image_load_store@host-mem-barrier@Vertex array/RaW/full barrier test/4x4,Fail
-spec@arb_shader_image_load_store@host-mem-barrier@Vertex array/RaW/full barrier test/64x64,Fail
-spec@arb_shader_image_load_store@host-mem-barrier@Vertex array/RaW/one bit barrier test/16x16,Fail
-spec@arb_shader_image_load_store@host-mem-barrier@Vertex array/RaW/one bit barrier test/64x64,Fail
-spec@arb_shader_image_load_store@layer,Fail
-spec@arb_shader_image_load_store@layer@image1DArray/layered binding test,Fail
-spec@arb_shader_image_load_store@layer@image1DArray/non-layered binding test,Fail
-spec@arb_shader_image_load_store@layer@image1D/layered binding test,Fail
-spec@arb_shader_image_load_store@layer@image1D/non-layered binding test,Fail
-spec@arb_shader_image_load_store@layer@image2DArray/layered binding test,Fail
-spec@arb_shader_image_load_store@layer@image2DArray/non-layered binding test,Fail
-spec@arb_shader_image_load_store@layer@image2D/layered binding test,Fail
-spec@arb_shader_image_load_store@layer@image2D/non-layered binding test,Fail
-spec@arb_shader_image_load_store@layer@image2DRect/layered binding test,Fail
-spec@arb_shader_image_load_store@layer@image2DRect/non-layered binding test,Fail
-spec@arb_shader_image_load_store@layer@image3D/layered binding test,Fail
-spec@arb_shader_image_load_store@layer@image3D/non-layered binding test,Fail
-spec@arb_shader_image_load_store@layer@imageBuffer/layered binding test,Fail
-spec@arb_shader_image_load_store@layer@imageBuffer/non-layered binding test,Fail
-spec@arb_shader_image_load_store@layer@imageCubeArray/layered binding test,Fail
-spec@arb_shader_image_load_store@layer@imageCubeArray/non-layered binding test,Fail
-spec@arb_shader_image_load_store@layer@imageCube/layered binding test,Fail
-spec@arb_shader_image_load_store@layer@imageCube/non-layered binding test,Fail
-spec@arb_shader_image_load_store@level@1DArray level binding test,Fail
-spec@arb_shader_image_load_store@level@1D level binding test,Fail
-spec@arb_shader_image_load_store@level@2DArray level binding test,Fail
-spec@arb_shader_image_load_store@level@2D level binding test,Fail
-spec@arb_shader_image_load_store@level@3D level binding test,Fail
-spec@arb_shader_image_load_store@level@CubeArray level binding test,Fail
-spec@arb_shader_image_load_store@level@Cube level binding test,Fail
-spec@arb_shader_image_load_store@level,Fail
 spec@arb_shader_image_load_store@max-images@Combined max image uniforms test,Fail
 spec@arb_shader_image_load_store@max-images,Fail
 spec@arb_shader_image_load_store@max-size,Fail
@@ -408,12 +282,8 @@ spec@arb_shader_storage_buffer_object@execution@memory-layouts-struct-deref,Fail
 spec@arb_shader_storage_buffer_object@execution@ssbo-atomiccompswap-int,ExpectedFail
 spec@arb_shader_storage_buffer_object@layout-std140-write-shader,Fail
 spec@arb_shader_storage_buffer_object@maxblocks,Fail
-spec@arb_shader_storage_buffer_object@minmax,Fail
 spec@arb_shader_texture_lod@execution@arb_shader_texture_lod-texgradcube,ExpectedFail
 spec@arb_shader_texture_lod@execution@arb_shader_texture_lod-texgrad,ExpectedFail
-spec@arb_shader_texture_lod@execution@glsl-fs-shadow2dgradarb-07,Fail
-spec@arb_shader_texture_lod@execution@glsl-fs-shadow2dgradarb-08,Fail
-spec@arb_shader_texture_lod@execution@glsl-fs-shadow2dgradarb-cumulative,Fail
 spec@arb_shader_texture_lod@execution@tex-miplevel-selection *gradarb 1d,Fail
 spec@arb_shader_texture_lod@execution@tex-miplevel-selection *gradarb 1dshadow,Fail
 spec@arb_shader_texture_lod@execution@tex-miplevel-selection *gradarb 2d,Fail
@@ -472,8 +342,6 @@ spec@arb_texture_cube_map_array@fbo-generatemipmap-cubemap array s3tc_dxt1,Fail
 spec@arb_texture_float@fbo-blending-formats,Fail
 spec@arb_texture_float@fbo-blending-formats@GL_ALPHA16F_ARB,Fail
 spec@arb_texture_float@fbo-blending-formats@GL_ALPHA32F_ARB,Fail
-spec@arb_texture_float@fbo-blending-formats@GL_INTENSITY16F_ARB,Fail
-spec@arb_texture_float@fbo-blending-formats@GL_INTENSITY32F_ARB,Fail
 spec@arb_texture_float@fbo-blending-formats@GL_RGB32F,Fail
 spec@arb_texture_float@fbo-clear-formats,Fail
 spec@arb_texture_float@fbo-clear-formats@GL_ALPHA16F_ARB,Fail
@@ -514,8 +382,6 @@ spec@arb_texture_float@texwrap formats bordercolor-swizzled@GL_RGBA32F- swizzled
 spec@arb_texture_multisample@arb_texture_multisample-dsa-texelfetch,Fail
 spec@arb_texture_multisample@arb_texture_multisample-dsa-texelfetch@Texture type: GL_RGB9_E5,Fail
 spec@arb_texture_query_lod@execution@fs-texturequerylod-nearest-biased,Fail
-spec@arb_texture_rectangle@glsl-fs-shadow2drect-07,Fail
-spec@arb_texture_rectangle@glsl-fs-shadow2drect-08,Fail
 spec@arb_texture_rectangle@texwrap rect bordercolor,Fail
 spec@arb_texture_rectangle@texwrap rect bordercolor@GL_RGBA8- border color only,Fail
 spec@arb_texture_rectangle@texwrap rect proj bordercolor,Fail
@@ -638,11 +504,6 @@ spec@ext_framebuffer_multisample@upsample 4 stencil,Fail
 spec@ext_framebuffer_object@fbo-blending-formats,Fail
 spec@ext_framebuffer_object@fbo-blending-formats@GL_ALPHA12,Fail
 spec@ext_framebuffer_object@fbo-blending-formats@GL_ALPHA16,Fail
-spec@ext_framebuffer_object@fbo-blending-formats@GL_INTENSITY12,Fail
-spec@ext_framebuffer_object@fbo-blending-formats@GL_INTENSITY16,Fail
-spec@ext_framebuffer_object@fbo-blending-formats@GL_INTENSITY4,Fail
-spec@ext_framebuffer_object@fbo-blending-formats@GL_INTENSITY8,Fail
-spec@ext_framebuffer_object@fbo-blending-formats@GL_INTENSITY,Fail
 spec@ext_framebuffer_object@fbo-blending-snorm,Fail
 spec@ext_framebuffer_object@fbo-clear-formats,Fail
 spec@ext_framebuffer_object@fbo-clear-formats@GL_ALPHA12,Fail
@@ -678,10 +539,6 @@ spec@ext_provoking_vertex@provoking-vertex,Fail
 spec@ext_texture_array@fbo-generatemipmap-array rgb9_e5,Fail
 spec@ext_texture_array@fbo-generatemipmap-array s3tc_dxt1,Fail
 spec@ext_texture_array@gen-mipmap,Fail
-spec@ext_texture_array@glsl-fs-shadow1darray-07,Fail
-spec@ext_texture_array@glsl-fs-shadow1darray-08,Fail
-spec@ext_texture_array@glsl-fs-shadow2darray-07,Fail
-spec@ext_texture_array@glsl-fs-shadow2darray-08,Fail
 spec@ext_texture_compression_rgtc@fbo-generatemipmap-formats-signed,Fail
 spec@ext_texture_compression_rgtc@fbo-generatemipmap-formats-signed@GL_COMPRESSED_SIGNED_RED_RGTC1,Fail
 spec@ext_texture_compression_rgtc@fbo-generatemipmap-formats-signed@GL_COMPRESSED_SIGNED_RED_RGTC1 NPOT,Fail
@@ -728,10 +585,6 @@ spec@ext_texture_shared_exponent@texwrap formats bordercolor,Fail
 spec@ext_texture_shared_exponent@texwrap formats bordercolor@GL_RGB9_E5- border color only,Fail
 spec@ext_texture_shared_exponent@texwrap formats bordercolor-swizzled,Fail
 spec@ext_texture_shared_exponent@texwrap formats bordercolor-swizzled@GL_RGB9_E5- swizzled- border color only,Fail
-spec@ext_texture_snorm@fbo-blending-formats,Fail
-spec@ext_texture_snorm@fbo-blending-formats@GL_INTENSITY16_SNORM,Fail
-spec@ext_texture_snorm@fbo-blending-formats@GL_INTENSITY8_SNORM,Fail
-spec@ext_texture_snorm@fbo-blending-formats@GL_INTENSITY_SNORM,Fail
 spec@ext_texture_snorm@multisample-formats 2 gl_ext_texture_snorm,Fail
 spec@ext_texture_snorm@multisample-formats 4 gl_ext_texture_snorm,Fail
 spec@ext_texture_snorm@texwrap formats bordercolor,Fail
@@ -796,12 +649,9 @@ spec@ext_texture_srgb@texwrap formats-s3tc bordercolor-swizzled@GL_COMPRESSED_SR
 spec@ext_texture_srgb@texwrap formats-s3tc bordercolor-swizzled@GL_COMPRESSED_SRGB_ALPHA- swizzled- border color only,Fail
 spec@ext_texture_srgb@texwrap formats-s3tc bordercolor-swizzled@GL_COMPRESSED_SRGB_S3TC_DXT1_EXT- swizzled- border color only,Fail
 spec@ext_texture_srgb@texwrap formats-s3tc bordercolor-swizzled@GL_COMPRESSED_SRGB- swizzled- border color only,Fail
+spec@ext_transform_feedback@builtin-varyings gl_culldistance,Fail
 spec@ext_transform_feedback@immediate-reuse-index-buffer,Fail
 spec@ext_transform_feedback@immediate-reuse-uniform-buffer,Fail
-spec@glsl-1.10@execution@samplers@glsl-fs-shadow1d-07,Fail
-spec@glsl-1.10@execution@samplers@glsl-fs-shadow1d-08,Fail
-spec@glsl-1.10@execution@samplers@glsl-fs-shadow2d-07,Fail
-spec@glsl-1.10@execution@samplers@glsl-fs-shadow2d-08,Fail
 spec@glsl-1.10@execution@samplers@glsl-fs-shadow2d-clamp-z,Fail
 spec@glsl-1.20@execution@tex-miplevel-selection gl2:texture() 1d,Fail
 spec@glsl-1.20@execution@tex-miplevel-selection gl2:texture() 1dshadow,Fail
@@ -817,47 +667,6 @@ spec@glsl-1.20@execution@tex-miplevel-selection gl2:textureproj 2d_projvec4,Fail
 spec@glsl-1.20@execution@tex-miplevel-selection gl2:textureproj 2dshadow,Fail
 spec@glsl-1.20@execution@tex-miplevel-selection gl2:textureproj 3d,Fail
 spec@glsl-1.30@execution@fs-texturelod-miplevels-biased,Fail
-spec@glsl-1.30@execution@interpolation@interpolation-mixed,Fail
-spec@glsl-1.30@execution@interpolation@interpolation-noperspective-gl_backcolor-flat-distance,Fail
-spec@glsl-1.30@execution@interpolation@interpolation-noperspective-gl_backcolor-flat-fixed,Fail
-spec@glsl-1.30@execution@interpolation@interpolation-noperspective-gl_backcolor-flat-none,Fail
-spec@glsl-1.30@execution@interpolation@interpolation-noperspective-gl_backcolor-flat-vertex,Fail
-spec@glsl-1.30@execution@interpolation@interpolation-noperspective-gl_backcolor-smooth-distance,Fail
-spec@glsl-1.30@execution@interpolation@interpolation-noperspective-gl_backcolor-smooth-fixed,Fail
-spec@glsl-1.30@execution@interpolation@interpolation-noperspective-gl_backcolor-smooth-none,Fail
-spec@glsl-1.30@execution@interpolation@interpolation-noperspective-gl_backcolor-smooth-vertex,Fail
-spec@glsl-1.30@execution@interpolation@interpolation-noperspective-gl_backsecondarycolor-flat-distance,Fail
-spec@glsl-1.30@execution@interpolation@interpolation-noperspective-gl_backsecondarycolor-flat-fixed,Fail
-spec@glsl-1.30@execution@interpolation@interpolation-noperspective-gl_backsecondarycolor-flat-none,Fail
-spec@glsl-1.30@execution@interpolation@interpolation-noperspective-gl_backsecondarycolor-flat-vertex,Fail
-spec@glsl-1.30@execution@interpolation@interpolation-noperspective-gl_backsecondarycolor-smooth-distance,Fail
-spec@glsl-1.30@execution@interpolation@interpolation-noperspective-gl_backsecondarycolor-smooth-fixed,Fail
-spec@glsl-1.30@execution@interpolation@interpolation-noperspective-gl_backsecondarycolor-smooth-none,Fail
-spec@glsl-1.30@execution@interpolation@interpolation-noperspective-gl_backsecondarycolor-smooth-vertex,Fail
-spec@glsl-1.30@execution@interpolation@interpolation-noperspective-gl_frontcolor-flat-distance,Fail
-spec@glsl-1.30@execution@interpolation@interpolation-noperspective-gl_frontcolor-flat-fixed,Fail
-spec@glsl-1.30@execution@interpolation@interpolation-noperspective-gl_frontcolor-flat-none,Fail
-spec@glsl-1.30@execution@interpolation@interpolation-noperspective-gl_frontcolor-flat-vertex,Fail
-spec@glsl-1.30@execution@interpolation@interpolation-noperspective-gl_frontcolor-smooth-distance,Fail
-spec@glsl-1.30@execution@interpolation@interpolation-noperspective-gl_frontcolor-smooth-fixed,Fail
-spec@glsl-1.30@execution@interpolation@interpolation-noperspective-gl_frontcolor-smooth-none,Fail
-spec@glsl-1.30@execution@interpolation@interpolation-noperspective-gl_frontcolor-smooth-vertex,Fail
-spec@glsl-1.30@execution@interpolation@interpolation-noperspective-gl_frontsecondarycolor-flat-distance,Fail
-spec@glsl-1.30@execution@interpolation@interpolation-noperspective-gl_frontsecondarycolor-flat-fixed,Fail
-spec@glsl-1.30@execution@interpolation@interpolation-noperspective-gl_frontsecondarycolor-flat-none,Fail
-spec@glsl-1.30@execution@interpolation@interpolation-noperspective-gl_frontsecondarycolor-flat-vertex,Fail
-spec@glsl-1.30@execution@interpolation@interpolation-noperspective-gl_frontsecondarycolor-smooth-distance,Fail
-spec@glsl-1.30@execution@interpolation@interpolation-noperspective-gl_frontsecondarycolor-smooth-fixed,Fail
-spec@glsl-1.30@execution@interpolation@interpolation-noperspective-gl_frontsecondarycolor-smooth-none,Fail
-spec@glsl-1.30@execution@interpolation@interpolation-noperspective-gl_frontsecondarycolor-smooth-vertex,Fail
-spec@glsl-1.30@execution@interpolation@interpolation-noperspective-other-flat-distance,Fail
-spec@glsl-1.30@execution@interpolation@interpolation-noperspective-other-flat-fixed,Fail
-spec@glsl-1.30@execution@interpolation@interpolation-noperspective-other-flat-none,Fail
-spec@glsl-1.30@execution@interpolation@interpolation-noperspective-other-flat-vertex,Fail
-spec@glsl-1.30@execution@interpolation@interpolation-noperspective-other-smooth-distance,Fail
-spec@glsl-1.30@execution@interpolation@interpolation-noperspective-other-smooth-fixed,Fail
-spec@glsl-1.30@execution@interpolation@interpolation-noperspective-other-smooth-none,Fail
-spec@glsl-1.30@execution@interpolation@interpolation-noperspective-other-smooth-vertex,Fail
 spec@glsl-1.30@execution@tex-miplevel-selection texture() 1darray,Fail
 spec@glsl-1.30@execution@tex-miplevel-selection texture() 1darrayshadow,Fail
 spec@glsl-1.30@execution@tex-miplevel-selection texture() 1d,Fail
@@ -867,7 +676,6 @@ spec@glsl-1.30@execution@tex-miplevel-selection texture() 2darrayshadow,Fail
 spec@glsl-1.30@execution@tex-miplevel-selection texture() 2d,Fail
 spec@glsl-1.30@execution@tex-miplevel-selection texture() 2dshadow,Fail
 spec@glsl-1.30@execution@tex-miplevel-selection texture() 3d,Fail
-spec@glsl-1.30@execution@tex-miplevel-selection texture(bias) 1darrayshadow,Fail
 spec@glsl-1.30@execution@tex-miplevel-selection texture() cubearray,Fail
 spec@glsl-1.30@execution@tex-miplevel-selection texture() cubearrayshadow,Fail
 spec@glsl-1.30@execution@tex-miplevel-selection texture() cube,Fail
@@ -920,7 +728,6 @@ spec@glsl-1.30@execution@tex-miplevel-selection textureoffset 2darrayshadow,Fail
 spec@glsl-1.30@execution@tex-miplevel-selection textureoffset 2d,Fail
 spec@glsl-1.30@execution@tex-miplevel-selection textureoffset 2dshadow,Fail
 spec@glsl-1.30@execution@tex-miplevel-selection textureoffset 3d,Fail
-spec@glsl-1.30@execution@tex-miplevel-selection textureoffset(bias) 1darrayshadow,Fail
 spec@glsl-1.30@execution@tex-miplevel-selection textureproj 1d,Fail
 spec@glsl-1.30@execution@tex-miplevel-selection textureproj 1d_projvec4,Fail
 spec@glsl-1.30@execution@tex-miplevel-selection textureproj 1dshadow,Fail
@@ -974,7 +781,6 @@ spec@glsl-1.50@execution@geometry@primitive-id-restart gl_triangle_fan other,Fai
 spec@glsl-1.50@execution@geometry@primitive-id-restart gl_triangle_strip other,Fail
 spec@glsl-1.50@execution@geometry@tri-strip-ordering-with-prim-restart gl_triangle_strip_adjacency other,Fail
 spec@glsl-1.50@execution@geometry@tri-strip-ordering-with-prim-restart gl_triangle_strip other,Fail
-spec@glsl-1.50@execution@gs-also-uses-smooth-flat-noperspective,Fail
 spec@glsl-1.50@execution@primitive-id-no-gs-first-vertex,Fail
 spec@glsl-1.50@execution@primitive-id-no-gs-quads,Fail
 spec@glsl-1.50@execution@primitive-id-no-gs-quad-strip,Fail
@@ -2555,7 +2361,7 @@ spec@!opengl 1.0@gl-1.0-logicop@GL_NOOP,Fail
 spec@!opengl 1.0@gl-1.0-logicop@GL_NOOP_MSAA,Fail
 spec@!opengl 1.0@gl-1.0-spot-light,Fail
 spec@!opengl 1.0@gl-1.0-swapbuffers-behavior,ExpectedFail
-spec@!opengl 1.0@rasterpos,Crash
+spec@!opengl 1.0@rasterpos,Fail
 spec@!opengl 1.0@rasterpos@glsl_vs_gs_linked,Fail
 spec@!opengl 1.0@rasterpos@glsl_vs_tes_linked,Fail
 spec@!opengl 1.1@clipflat,Fail
@@ -3353,7 +3159,6 @@ spec@!opengl 2.0@gl-2.0-edgeflag-immediate,Fail
 spec@!opengl 2.0@gl-2.0-large-point-fs,Fail
 spec@!opengl 2.0@gl-2.0-vertexattribpointer,Crash
 spec@!opengl 2.0@occlusion-query-discard,Fail
-spec@!opengl 3.0@required-texture-attachment-formats,Fail
 spec@!opengl 3.0@sampler-cube-shadow,Fail
 spec@!opengl 3.2@gl-3.2-adj-prims cull-back pv-first,ExpectedFail
 spec@!opengl 3.2@gl-3.2-adj-prims cull-front pv-first,ExpectedFail
