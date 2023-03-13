@@ -131,6 +131,7 @@ struct msm_object {
    bool exported   : 1;
    bool exportable : 1;
    struct virgl_resource *res;
+   void *map;
 };
 
 static struct msm_object *
@@ -418,6 +419,9 @@ msm_renderer_detach_resource(struct virgl_context *vctx, struct virgl_resource *
    }
 
    msm_remove_object(mctx, obj);
+
+   if (obj->map)
+      munmap(obj->map, obj->size);
 
    gem_close(mctx->fd, obj->handle);
 
@@ -762,7 +766,15 @@ msm_ccmd_gem_set_iova(struct msm_context *mctx, const struct msm_ccmd_req *hdr)
    }
 
    uint64_t iova = req->iova;
-   ret = gem_info(mctx, obj->handle, MSM_INFO_SET_IOVA, &iova);
+   if (iova) {
+      TRACE_SCOPE_BEGIN("SET_IOVA");
+      ret = gem_info(mctx, obj->handle, MSM_INFO_SET_IOVA, &iova);
+      TRACE_SCOPE_END("SET_IOVA");
+   } else {
+      TRACE_SCOPE_BEGIN("CLEAR_IOVA");
+      ret = gem_info(mctx, obj->handle, MSM_INFO_SET_IOVA, &iova);
+      TRACE_SCOPE_END("CLEAR_IOVA");
+   }
    if (ret) {
       drm_log("SET_IOVA failed: %d (%s)", ret, strerror(errno));
       goto out_error;
@@ -916,18 +928,15 @@ out:
 }
 
 static int
-msm_ccmd_gem_upload(struct msm_context *mctx, const struct msm_ccmd_req *hdr)
+map_object(struct msm_context *mctx, struct msm_object *obj)
 {
-   const struct msm_ccmd_gem_upload_req *req = to_msm_ccmd_gem_upload_req(hdr);
    uint64_t offset;
    int ret;
 
-   if (req->pad || !valid_payload_len(req)) {
-      drm_log("Invalid upload ccmd");
-      return -EINVAL;
-   }
+   if (obj->map)
+      return 0;
 
-   uint32_t handle = handle_from_res_id(mctx, req->res_id);
+   uint32_t handle = handle_from_res_id(mctx, obj->res_id);
    ret = gem_info(mctx, handle, MSM_INFO_GET_OFFSET, &offset);
    if (ret) {
       drm_log("alloc failed: %s", strerror(errno));
@@ -935,15 +944,39 @@ msm_ccmd_gem_upload(struct msm_context *mctx, const struct msm_ccmd_req *hdr)
    }
 
    uint8_t *map =
-      mmap(0, req->len + req->off, PROT_READ | PROT_WRITE, MAP_SHARED, mctx->fd, offset);
+      mmap(0, obj->size, PROT_READ | PROT_WRITE, MAP_SHARED, mctx->fd, offset);
    if (map == MAP_FAILED) {
       drm_log("mmap failed: %s", strerror(errno));
       return -ENOMEM;
    }
 
-   memcpy(&map[req->off], req->payload, req->len);
+   obj->map = map;
 
-   munmap(map, req->len);
+   return 0;
+}
+
+static int
+msm_ccmd_gem_upload(struct msm_context *mctx, const struct msm_ccmd_req *hdr)
+{
+   const struct msm_ccmd_gem_upload_req *req = to_msm_ccmd_gem_upload_req(hdr);
+   int ret;
+
+   if (req->pad || !valid_payload_len(req)) {
+      drm_log("Invalid upload ccmd");
+      return -EINVAL;
+   }
+
+   struct msm_object *obj = msm_get_object_from_res_id(mctx, req->res_id);
+   if (!obj) {
+      drm_log("No obj: res_id=%u", req->res_id);
+      return -ENOENT;
+   }
+
+   ret = map_object(mctx, obj);
+   if (ret)
+      return ret;
+
+   memcpy(&obj->map[req->off], req->payload, req->len);
 
    return 0;
 }
@@ -1078,6 +1111,8 @@ submit_cmd_dispatch(struct msm_context *mctx, const struct msm_ccmd_req *hdr)
    drm_dbg("%s: hdr={cmd=%u, len=%u, seqno=%u, rsp_off=0x%x)", ccmd->name, hdr->cmd,
            hdr->len, hdr->seqno, hdr->rsp_off);
 
+   TRACE_SCOPE_BEGIN(ccmd->name);
+
    /* If the request length from the guest is smaller than the expected
     * size, ie. newer host and older guest, we need to make a copy of
     * the request with the new fields at the end zero initialized.
@@ -1092,6 +1127,8 @@ submit_cmd_dispatch(struct msm_context *mctx, const struct msm_ccmd_req *hdr)
    } else {
       ret = ccmd->handler(mctx, hdr);
    }
+
+   TRACE_SCOPE_END(ccmd->name);
 
    if (ret) {
       drm_log("%s: dispatch failed: %d (%s)", ccmd->name, ret, strerror(errno));
@@ -1180,17 +1217,17 @@ msm_renderer_retire_fences(UNUSED struct virgl_context *vctx)
 }
 
 static int
-msm_renderer_submit_fence(struct virgl_context *vctx, uint32_t flags, uint64_t queue_id,
+msm_renderer_submit_fence(struct virgl_context *vctx, uint32_t flags, uint32_t ring_idx,
                           uint64_t fence_id)
 {
    struct msm_context *mctx = to_msm_context(vctx);
 
-   drm_dbg("flags=0x%x, queue_id=%" PRIu64 ", fence_id=%" PRIu64, flags,
-           queue_id, fence_id);
+   drm_dbg("flags=0x%x, ring_idx=%" PRIu32 ", fence_id=%" PRIu64, flags,
+           ring_idx, fence_id);
 
-   /* timeline is queue_id-1 (because queue_id 0 is host CPU timeline) */
-   if (queue_id > nr_timelines) {
-      drm_log("invalid queue_id: %" PRIu64, queue_id);
+   /* timeline is ring_idx-1 (because ring_idx 0 is host CPU timeline) */
+   if (ring_idx > nr_timelines) {
+      drm_log("invalid ring_idx: %" PRIu32, ring_idx);
       return -EINVAL;
    }
 
@@ -1198,12 +1235,12 @@ msm_renderer_submit_fence(struct virgl_context *vctx, uint32_t flags, uint64_t q
     * meaning by the time ->submit_fence() is called, the fence has
     * already passed.. so just immediate signal:
     */
-   if (queue_id == 0) {
-      vctx->fence_retire(vctx, queue_id, fence_id);
+   if (ring_idx == 0) {
+      vctx->fence_retire(vctx, ring_idx, fence_id);
       return 0;
    }
 
-   return drm_timeline_submit_fence(&mctx->timelines[queue_id - 1], flags, fence_id);
+   return drm_timeline_submit_fence(&mctx->timelines[ring_idx - 1], flags, fence_id);
 }
 
 struct virgl_context *

@@ -23,7 +23,7 @@
 
 project(
    'virglrenderer', 'c',
-   version: '0.9.0',
+   version: '0.10.4',
    license : 'MIT',
    meson_version : '>= 0.53',
    default_options : ['buildtype=release', 'b_ndebug=if-release',
@@ -37,10 +37,9 @@ project(
 #    interface age
 # 3. If the ABI has changed in an incompatible way increment the binary_age
 #    and set revision and interface_age to zero
-
 binary_age    = 1
-interface_age = 5
-revision      = 3
+interface_age = 7
+revision      = 7
 
 cc = meson.get_compiler('c')
 
@@ -52,6 +51,7 @@ warnings = [
    '-Werror=implicit-function-declaration',
    '-Werror=missing-prototypes',
    '-Wmissing-prototypes',
+   '-Werror=incompatible-pointer-types',
    '-Werror=int-to-pointer-cast',
    '-Wno-overlength-strings',
 ]
@@ -72,7 +72,7 @@ epoxy_dep = dependency('epoxy', version: '>= 1.5.4')
 m_dep = cc.find_library('m', required : false)
 
 conf_data = configuration_data()
-conf_data.set('VERSION', '0.8.1')
+conf_data.set('VERSION', meson.project_version())
 conf_data.set('_GNU_SOURCE', 1)
 conf_data.set('VIRGL_RENDERER_UNSTABLE_APIS', 1)
 
@@ -280,6 +280,13 @@ if with_render_server
    endif
 endif
 
+with_video = get_option('video')
+if with_video
+  conf_data.set('ENABLE_VIDEO', 1)
+  libva_dep = dependency('libva')
+  libvadrm_dep = dependency('libva-drm')
+endif
+
 configure_file(input : 'config.h.meson',
                output : 'config.h',
                configuration : conf_data)
@@ -316,6 +323,7 @@ summary({'c_args': (' ').join(get_option('c_args')),
         'drm-msm': with_drm_msm,
         'render server': with_render_server,
         'render server worker': with_render_server ? with_render_server_worker : 'none',
+        'video': with_video,
         'tests': with_tests,
         'fuzzer': with_fuzzer,
         'tracing': with_tracing,

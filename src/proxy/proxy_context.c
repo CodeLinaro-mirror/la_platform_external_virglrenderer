@@ -152,7 +152,7 @@ proxy_context_retire_fences_internal(struct proxy_context *ctx)
       const uint32_t ring_idx = u_bit_scan64(&old_busy_mask);
       const uint32_t cur_seqno = proxy_context_load_timeline_seqno(ctx, ring_idx);
       if (!proxy_context_retire_timeline_fences_locked(ctx, ring_idx, cur_seqno))
-         new_busy_mask |= 1 << ring_idx;
+         new_busy_mask |= 1ull << ring_idx;
    }
 
    ctx->timeline_busy_mask = new_busy_mask;
@@ -196,14 +196,12 @@ proxy_context_sync_thread(void *arg)
 static int
 proxy_context_submit_fence(struct virgl_context *base,
                            uint32_t flags,
-                           uint64_t queue_id,
+                           uint32_t ring_idx,
                            uint64_t fence_id)
 {
    struct proxy_context *ctx = (struct proxy_context *)base;
    const uint64_t old_busy_mask = ctx->timeline_busy_mask;
 
-   /* TODO fix virglrenderer to match virtio-gpu spec which uses ring_idx */
-   const uint32_t ring_idx = queue_id;
    if (ring_idx >= PROXY_CONTEXT_TIMELINE_COUNT)
       return -EINVAL;
 
@@ -220,7 +218,7 @@ proxy_context_submit_fence(struct virgl_context *base,
       mtx_lock(&ctx->timeline_mutex);
 
    list_addtail(&fence->head, &timeline->fences);
-   ctx->timeline_busy_mask |= 1 << ring_idx;
+   ctx->timeline_busy_mask |= 1ull << ring_idx;
 
    if (proxy_renderer.flags & VIRGL_RENDERER_ASYNC_FENCE_CB)
       mtx_unlock(&ctx->timeline_mutex);
@@ -319,7 +317,7 @@ validate_resource_fd_shm(int fd, uint64_t expected_size)
       return false;
    }
 
-   const uint64_t size = lseek64(fd, 0, SEEK_END);
+   const uint64_t size = lseek(fd, 0, SEEK_END);
    if (size != expected_size) {
       proxy_log("failed to validate shm size(%" PRIu64 ") expected(%" PRIu64 ")", size,
                 expected_size);
