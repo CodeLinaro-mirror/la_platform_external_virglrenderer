@@ -162,10 +162,10 @@ cc_library {
             ],
             shared_libs: [
                 "libcutils",
-                "libdrm",
                 "liblog",
             ],
             static_libs: [
+                "libdrm",
                 "libepoxy",
                 "libgbm",
             ],
