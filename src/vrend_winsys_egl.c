@@ -323,7 +323,9 @@ struct virgl_egl *virgl_egl_init(struct virgl_gbm *gbm, bool surfaceless, bool g
          egl->egl_display = get_platform_display (EGL_PLATFORM_GBM_KHR,
                                                  (EGLNativeDisplayType)egl->gbm->device, NULL);
    } else {
-      egl->egl_display = eglGetDisplay((EGLNativeDisplayType)egl->gbm->device);
+      if (egl->gbm && egl->gbm->device) {
+        egl->egl_display = eglGetDisplay((EGLNativeDisplayType)egl->gbm->device);
+      }
    }
 
    if (!egl->egl_display) {
