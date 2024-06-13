@@ -679,6 +679,8 @@ struct vrend_streamout_object {
    struct list_head head;
    int xfb_state;
    struct vrend_so_target *so_targets[16];
+   uint64_t xfb_shdwbuf_size;
+   GLuint xfb_shdwbuf_id;
 };
 
 #define XFB_STATE_OFF 0
@@ -810,6 +812,11 @@ struct vrend_sub_context {
    uint32_t sysvalue_data_cookie;
    uint32_t current_program_id;
    uint32_t current_pipeline_id;
+
+   uint16_t xfb_shadow_stride[PIPE_MAX_SO_BUFFERS];
+   struct vrend_streamout_object *xfb_shadow_so;
+   GLenum xfb_shadow_mode;
+   GLuint xfb_query_id;
 };
 
 struct vrend_untyped_resource {
@@ -896,6 +903,11 @@ void vrend_update_stencil_state(struct vrend_sub_context *sub_ctx);
 static struct vrend_format_table tex_conv_table[VIRGL_FORMAT_MAX_EXTENDED] =  {0};
 
 static uint32_t vrend_renderer_get_video_memory(void);
+
+static void vrend_resource_buffer_copy_raw(GLuint src_id,
+                                       GLuint dst_id,
+                                       uint32_t dstx, uint32_t srcx,
+                                       uint32_t width);
 
 static inline bool vrend_format_can_sample(enum virgl_formats format)
 {
@@ -1526,42 +1538,15 @@ static void dump_stream_out(struct pipe_stream_output_info *so)
    }
 }
 
-static char *get_skip_str(int *skip_val)
-{
-   char *start_skip = NULL;
-   if (*skip_val < 0) {
-      *skip_val = 0;
-      return NULL;
-   }
-
-   if (*skip_val == 1) {
-      start_skip = strdup("gl_SkipComponents1");
-      *skip_val -= 1;
-   } else if (*skip_val == 2) {
-      start_skip = strdup("gl_SkipComponents2");
-      *skip_val -= 2;
-   } else if (*skip_val == 3) {
-      start_skip = strdup("gl_SkipComponents3");
-      *skip_val -= 3;
-   } else if (*skip_val >= 4) {
-      start_skip = strdup("gl_SkipComponents4");
-      *skip_val -= 4;
-   }
-   return start_skip;
-}
-
 static void set_stream_out_varyings(ASSERTED struct vrend_sub_context *sub_ctx,
                                     int prog_id,
                                     struct vrend_shader_info *sinfo)
 {
    struct pipe_stream_output_info *so = &sinfo->so_info;
    char *varyings[PIPE_MAX_SHADER_OUTPUTS*2];
-   int j;
    unsigned i, n_outputs = 0;
    int last_buffer = 0;
-   char *start_skip;
    int buf_offset = 0;
-   int skip;
    if (!so->num_outputs)
       return;
 
@@ -1570,24 +1555,10 @@ static void set_stream_out_varyings(ASSERTED struct vrend_sub_context *sub_ctx,
    for (i = 0; i < so->num_outputs; i++) {
       if (last_buffer != so->output[i].output_buffer) {
 
-         skip = so->stride[last_buffer] - buf_offset;
-         while (skip && n_outputs < ARRAY_SIZE(varyings)) {
-            start_skip = get_skip_str(&skip);
-            if (start_skip)
-               varyings[n_outputs++] = start_skip;
-         }
-         for (j = last_buffer; j < so->output[i].output_buffer && n_outputs < ARRAY_SIZE(varyings); j++)
-            varyings[n_outputs++] = strdup("gl_NextBuffer");
          last_buffer = so->output[i].output_buffer;
          buf_offset = 0;
       }
 
-      skip = so->output[i].dst_offset - buf_offset;
-      while (skip && n_outputs < ARRAY_SIZE(varyings)) {
-         start_skip = get_skip_str(&skip);
-         if (start_skip)
-            varyings[n_outputs++] = start_skip;
-      }
       buf_offset = so->output[i].dst_offset;
 
       buf_offset += so->output[i].num_components;
@@ -1595,12 +1566,10 @@ static void set_stream_out_varyings(ASSERTED struct vrend_sub_context *sub_ctx,
          varyings[n_outputs++] = strdup(sinfo->so_names[i]);
    }
 
-   skip = so->stride[last_buffer] - buf_offset;
-   while (skip && n_outputs < ARRAY_SIZE(varyings)) {
-      start_skip = get_skip_str(&skip);
-      if (start_skip)
-         varyings[n_outputs++] = start_skip;
-   }
+   sub_ctx->xfb_shadow_stride[0] = so->stride[0];
+   sub_ctx->xfb_shadow_stride[1] = so->stride[1];
+   sub_ctx->xfb_shadow_stride[2] = so->stride[2];
+   sub_ctx->xfb_shadow_stride[3] = so->stride[3];
 
    glTransformFeedbackVaryings(prog_id, n_outputs,
                                (const GLchar **)varyings, GL_INTERLEAVED_ATTRIBS_EXT);
@@ -1608,6 +1577,60 @@ static void set_stream_out_varyings(ASSERTED struct vrend_sub_context *sub_ctx,
    for (i = 0; i < n_outputs; i++)
       if (varyings[i])
          free(varyings[i]);
+}
+
+
+static void copy_stream_out_varyings(struct vrend_sub_context *sub_ctx)
+{
+   struct vrend_streamout_object *so_obj = sub_ctx->xfb_shadow_so;
+   uint64_t combined_strides = 0;
+   uint64_t src_off = 0;
+   uint64_t dst_off = 0;
+   uint8_t num_vertices = 1; // default is a point
+   uint64_t buf_off = 0;
+   GLuint xfb_primitives_written = 0;
+   GLint params = 0;
+
+   switch (sub_ctx->xfb_shadow_mode)
+   {
+   case GL_LINES:
+      num_vertices = 2;
+      break;
+   case GL_TRIANGLES:
+      num_vertices = 3;
+      break;
+   default:
+      break;
+   }
+
+   for (uint8_t i = 0; i < PIPE_MAX_SO_BUFFERS && sub_ctx->xfb_shadow_stride[i] != 0; i++)
+      combined_strides += sub_ctx->xfb_shadow_stride[i];
+
+   glGetQueryiv(GL_TRANSFORM_FEEDBACK_PRIMITIVES_WRITTEN, GL_CURRENT_QUERY,  &params);
+   if (params != 0)
+      glEndQuery(GL_TRANSFORM_FEEDBACK_PRIMITIVES_WRITTEN);
+
+   // Wait here for the result as well
+   glGetQueryObjectuiv(sub_ctx->xfb_query_id, GL_QUERY_RESULT, &xfb_primitives_written);
+
+   for (uint8_t i = 0; i < PIPE_MAX_SO_BUFFERS && sub_ctx->xfb_shadow_stride[i] != 0 && (void *) so_obj->so_targets[i] != NULL; i++) {
+      for (uint64_t j = 0; j < xfb_primitives_written*num_vertices; j++) {
+         src_off = buf_off + combined_strides*j;
+         dst_off = sub_ctx->xfb_shadow_stride[i]*j;
+
+         if (dst_off*sizeof(GLfloat) + sub_ctx->xfb_shadow_stride[i]*sizeof(GLfloat)*num_vertices > so_obj->xfb_shdwbuf_size)
+            return;
+
+         vrend_resource_buffer_copy_raw(
+            so_obj->xfb_shdwbuf_id,
+            so_obj->so_targets[i]->buffer->gl_id,
+            dst_off*sizeof(GLfloat),
+            src_off*sizeof(GLfloat),
+            sub_ctx->xfb_shadow_stride[i]*sizeof(GLfloat));
+      }
+
+      buf_off += sub_ctx->xfb_shadow_stride[i];
+   }
 }
 
 static inline int
@@ -5895,6 +5918,7 @@ int vrend_draw_vbo(struct vrend_context *ctx,
    struct vrend_resource *indirect_res = NULL;
    struct vrend_resource *indirect_params_res = NULL;
    struct vrend_sub_context *sub_ctx = ctx->sub;
+   GLint gl_current_query;
 
    if (ctx->in_error)
       return ENOTRECOVERABLE;
@@ -6030,14 +6054,25 @@ int vrend_draw_vbo(struct vrend_context *ctx,
 
    if (sub_ctx->current_so) {
       if (sub_ctx->current_so->xfb_state == XFB_STATE_STARTED_NEED_BEGIN) {
-         if (sub_ctx->shaders[PIPE_SHADER_GEOMETRY])
-            glBeginTransformFeedback(get_gs_xfb_mode(sub_ctx->shaders[PIPE_SHADER_GEOMETRY]->sinfo.gs_out_prim));
-     else if (sub_ctx->shaders[PIPE_SHADER_TESS_EVAL])
-            glBeginTransformFeedback(get_tess_xfb_mode(sub_ctx->shaders[PIPE_SHADER_TESS_EVAL]->sinfo.tes_prim,
-                               sub_ctx->shaders[PIPE_SHADER_TESS_EVAL]->sinfo.tes_point_mode));
-         else
-            glBeginTransformFeedback(get_xfb_mode(info->mode));
+         if (sub_ctx->shaders[PIPE_SHADER_GEOMETRY]) {
+            sub_ctx->xfb_shadow_mode = get_gs_xfb_mode(sub_ctx->shaders[PIPE_SHADER_GEOMETRY]->sinfo.gs_out_prim);
+            glBeginTransformFeedback(sub_ctx->xfb_shadow_mode);
+         }
+         else  if (sub_ctx->shaders[PIPE_SHADER_TESS_EVAL]) {
+                  sub_ctx->xfb_shadow_mode = get_tess_xfb_mode(sub_ctx->shaders[PIPE_SHADER_TESS_EVAL]->sinfo.tes_prim,
+                     sub_ctx->shaders[PIPE_SHADER_TESS_EVAL]->sinfo.tes_point_mode);
+                  glBeginTransformFeedback(sub_ctx->xfb_shadow_mode);
+               } else {
+                  sub_ctx->xfb_shadow_mode = get_xfb_mode(info->mode);
+                  glBeginTransformFeedback(sub_ctx->xfb_shadow_mode);
+               }
          sub_ctx->current_so->xfb_state = XFB_STATE_STARTED;
+
+         glGetQueryiv(GL_TRANSFORM_FEEDBACK_PRIMITIVES_WRITTEN, GL_CURRENT_QUERY, &gl_current_query);
+         if (gl_current_query == 0) {
+            glGenQueries(1, &sub_ctx->xfb_query_id);
+            glBeginQuery(GL_TRANSFORM_FEEDBACK_PRIMITIVES_WRITTEN, ctx->sub->xfb_query_id);
+         }
       } else if (sub_ctx->current_so->xfb_state == XFB_STATE_PAUSED) {
          glResumeTransformFeedback();
          sub_ctx->current_so->xfb_state = XFB_STATE_STARTED;
@@ -9944,6 +9979,11 @@ static int vrend_renderer_transfer_send_iov(struct vrend_context *ctx,
       return 0;
    }
 
+   if (ctx->sub && ctx->sub->xfb_shadow_so) {
+      copy_stream_out_varyings(ctx->sub);
+      ctx->sub->xfb_shadow_so = NULL;
+   }
+
    if (has_bit(res->storage_bits, VREND_STORAGE_GL_BUFFER)) {
       glBindBufferARB(res->target, res->gl_id);
       void *data = glMapBufferRange(res->target, info->box->x, info->box->width, GL_MAP_READ_BIT);
@@ -10322,18 +10362,22 @@ void vrend_set_tess_state(UNUSED struct vrend_context *ctx, const float tess_fac
    }
 }
 
-static void vrend_hw_emit_streamout_targets(UNUSED struct vrend_context *ctx, struct vrend_streamout_object *so_obj)
+static void vrend_hw_emit_shadow_streamout_target(UNUSED struct vrend_context *ctx, struct vrend_streamout_object *so_obj)
 {
    unsigned i;
 
    for (i = 0; i < so_obj->num_targets; i++) {
-      if (!so_obj->so_targets[i])
+      if (!so_obj->so_targets[i]) {
          glBindBufferBase(GL_TRANSFORM_FEEDBACK_BUFFER, i, 0);
-      else if (so_obj->so_targets[i]->buffer_offset || so_obj->so_targets[i]->buffer_size < so_obj->so_targets[i]->buffer->base.width0)
-         glBindBufferRange(GL_TRANSFORM_FEEDBACK_BUFFER, i, so_obj->so_targets[i]->buffer->gl_id, so_obj->so_targets[i]->buffer_offset, so_obj->so_targets[i]->buffer_size);
-      else
-         glBindBufferBase(GL_TRANSFORM_FEEDBACK_BUFFER, i, so_obj->so_targets[i]->buffer->gl_id);
+         continue;
+      }
+      so_obj->xfb_shdwbuf_size += so_obj->so_targets[i]->buffer_size;
    }
+
+   glGenBuffers(1, &so_obj->xfb_shdwbuf_id);
+   glBindBuffer(GL_ARRAY_BUFFER, so_obj->xfb_shdwbuf_id);
+   glBufferData(GL_ARRAY_BUFFER, so_obj->xfb_shdwbuf_size, NULL, GL_STATIC_READ);
+   glBindBufferBase(GL_TRANSFORM_FEEDBACK_BUFFER, 0, so_obj->xfb_shdwbuf_id);
 }
 
 void vrend_set_streamout_targets(struct vrend_context *ctx,
@@ -10379,15 +10423,29 @@ void vrend_set_streamout_targets(struct vrend_context *ctx,
          }
          vrend_so_target_reference(&obj->so_targets[i], target);
       }
-      vrend_hw_emit_streamout_targets(ctx, obj);
+      vrend_hw_emit_shadow_streamout_target(ctx, obj);
       list_addtail(&obj->head, &ctx->sub->streamout_list);
       ctx->sub->current_so = obj;
       obj->xfb_state = XFB_STATE_STARTED_NEED_BEGIN;
    } else {
       if (has_feature(feat_transform_feedback2))
          glBindTransformFeedback(GL_TRANSFORM_FEEDBACK, 0);
+      ctx->sub->xfb_shadow_so = ctx->sub->current_so;
       ctx->sub->current_so = NULL;
    }
+}
+
+static void vrend_resource_buffer_copy_raw(GLuint src_id,
+                                       GLuint dst_id,
+                                       uint32_t dstx, uint32_t srcx,
+                                       uint32_t width)
+{
+   glBindBuffer(GL_COPY_READ_BUFFER, src_id);
+   glBindBuffer(GL_COPY_WRITE_BUFFER, dst_id);
+
+   glCopyBufferSubData(GL_COPY_READ_BUFFER, GL_COPY_WRITE_BUFFER, srcx, dstx, width);
+   glBindBuffer(GL_COPY_READ_BUFFER, 0);
+   glBindBuffer(GL_COPY_WRITE_BUFFER, 0);
 }
 
 static void vrend_resource_buffer_copy(UNUSED struct vrend_context *ctx,
@@ -10396,12 +10454,7 @@ static void vrend_resource_buffer_copy(UNUSED struct vrend_context *ctx,
                                        uint32_t dstx, uint32_t srcx,
                                        uint32_t width)
 {
-   glBindBuffer(GL_COPY_READ_BUFFER, src_res->gl_id);
-   glBindBuffer(GL_COPY_WRITE_BUFFER, dst_res->gl_id);
-
-   glCopyBufferSubData(GL_COPY_READ_BUFFER, GL_COPY_WRITE_BUFFER, srcx, dstx, width);
-   glBindBuffer(GL_COPY_READ_BUFFER, 0);
-   glBindBuffer(GL_COPY_WRITE_BUFFER, 0);
+   vrend_resource_buffer_copy_raw(src_res->gl_id, dst_res->gl_id, dstx, srcx, width);
 }
 
 static void vrend_resource_copy_fallback(struct vrend_resource *src_res,
@@ -11769,6 +11822,11 @@ int vrend_create_query(struct vrend_context *ctx, uint32_t handle,
    if (err) {
       vrend_resource_reference(&q->res, NULL);
       FREE(q);
+   } else {
+      if (q->gltype == GL_TRANSFORM_FEEDBACK_PRIMITIVES_WRITTEN)
+         // Copy XFB ID for internal use assuming it frontend will query before
+         // fetching XFB data but after XFB end
+         ctx->sub->xfb_query_id = q->id;
    }
 
    return err;
@@ -11804,10 +11862,14 @@ int vrend_begin_query(struct vrend_context *ctx, uint32_t handle)
    if (q->gltype == GL_TIMESTAMP)
       return 0;
 
-   if (q->index > 0)
-      glBeginQueryIndexed(q->gltype, q->index, q->id);
-   else
-      glBeginQuery(q->gltype, q->id);
+   if (q->gltype == GL_TRANSFORM_FEEDBACK_PRIMITIVES_WRITTEN) {
+      glBeginQuery(q->gltype, ctx->sub->xfb_query_id);
+   } else {
+      if (q->index > 0)
+         glBeginQueryIndexed(q->gltype, q->index, q->id);
+      else
+         glBeginQuery(q->gltype, q->id);
+   }
    return 0;
 }
 
