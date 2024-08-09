@@ -53,9 +53,9 @@ license {
 }
 
 cc_library_headers {
-  name: "virgl_headers",
-  host_supported: true,
-  export_include_dirs: ["src"],
+    name: "virgl_headers",
+    host_supported: true,
+    export_include_dirs: ["src"],
 }
 
 cc_library {
@@ -121,14 +121,12 @@ cc_library {
         "src/vrend_tweaks.c",
         "src/vrend_winsys.c",
         "src/vrend_winsys_egl.c",
-        "src/vrend_winsys_gbm.c",
+        "src/vrend_winsys_gbm_stubs.c",
     ],
     target: {
         host_linux: {
             shared_libs: [
-                "libdrm",
                 "libepoxy",
-                "libgbm",
             ],
         },
         linux_glibc: {
@@ -165,9 +163,7 @@ cc_library {
                 "liblog",
             ],
             static_libs: [
-                "libdrm",
                 "libepoxy",
-                "libgbm",
             ],
         },
     },

@@ -64,8 +64,7 @@ virglrenderer_sources = [
 ]
 
 vrend_winsys_egl_sources = [
-   'vrend_winsys_gbm.c',
-   'vrend_winsys_gbm.h',
+   'vrend_winsys_gbm_stubs.c',
    'vrend_winsys_egl.c',
    'vrend_winsys_egl.h',
 ]
@@ -188,7 +187,6 @@ virgl_sources += vrend_sources
 
 if have_egl
    virgl_sources += vrend_winsys_egl_sources
-   virgl_depends += [gbm_dep]
 endif
 
 if have_glx
