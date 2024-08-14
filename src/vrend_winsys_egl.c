@@ -36,16 +36,14 @@
 #include <poll.h>
 #include <stdbool.h>
 #include <unistd.h>
-#include <xf86drm.h>
 
 #include "util/u_memory.h"
-
+#include "virgl_hw.h"
+#include "virgl_util.h"
 #include "virglrenderer.h"
 #include "vrend_winsys.h"
 #include "vrend_winsys_egl.h"
-#include "virgl_hw.h"
 #include "vrend_winsys_gbm.h"
-#include "virgl_util.h"
 
 #define EGL_KHR_SURFACELESS_CONTEXT            BIT(0)
 #define EGL_KHR_CREATE_CONTEXT                 BIT(1)

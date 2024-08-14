@@ -25,7 +25,6 @@
 #ifndef VIRGL_GBM_H
 #define VIRGL_GBM_H
 
-#include <gbm.h>
 #include "vrend_iov.h"
 #include "virglrenderer.h"
 
@@ -96,6 +95,10 @@ int gbm_get_default_device_fd(void);
  * query. If fd < 0, the gbm device was opened with the fd provided by the
  * (*get_drm_fd) hook.
  */
+
+struct gbm_device;
+struct gbm_bo;
+
 struct virgl_gbm {
    int fd;
    struct gbm_device *device;
