@@ -3374,7 +3374,7 @@ static void translate_tex(struct dump_ctx *ctx,
    bool has_bias = strbuf_get_len (&bias_buf) != 0;
    bool has_offset = strbuf_get_len (&offset_buf) != 0;
    // EXT_texture_shadow_lod defines a few more functions handling bias
-   if (has_bias &&
+   if (has_bias && ctx->cfg->has_texture_shadow_lod &&
        (inst->Texture.Texture == TGSI_TEXTURE_SHADOW2D_ARRAY ||
         inst->Texture.Texture == TGSI_TEXTURE_SHADOWCUBE ||
         inst->Texture.Texture == TGSI_TEXTURE_SHADOWCUBE_ARRAY))
@@ -3382,6 +3382,7 @@ static void translate_tex(struct dump_ctx *ctx,
 
    // EXT_texture_shadow_lod also adds the missing textureOffset for 2DArrayShadow in GLES
    if ((has_bias || has_offset) && ctx->cfg->use_gles &&
+       ctx->cfg->has_texture_shadow_lod &&
        (inst->Texture.Texture == TGSI_TEXTURE_SHADOW1D_ARRAY ||
         inst->Texture.Texture == TGSI_TEXTURE_SHADOW2D_ARRAY))
       ctx->shader_req_bits |= SHADER_REQ_TEXTURE_SHADOW_LOD;
