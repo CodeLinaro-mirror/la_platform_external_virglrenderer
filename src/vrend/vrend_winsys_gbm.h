@@ -35,6 +35,16 @@
 #define VIRGL_GBM_MAX_PLANES 4
 #endif
 
+/* GBM_FORMAT_R8 */
+#ifndef GBM_FORMAT_R8
+#define GBM_FORMAT_R8		__gbm_fourcc_code('R', '8', ' ', ' ') /* [7:0] R */
+#endif
+
+/* GBM_FORMAT_XBGR16161616F */
+#ifndef GBM_FORMAT_XBGR16161616F
+#define GBM_FORMAT_XBGR16161616F __gbm_fourcc_code('X', 'B', '4', 'H') /* [63:0] x:B:G:R 16:16:16:16 little endian */
+#endif
+
 /* GBM_FORMAT_ABGR16161616F was added since mesa 20.0 */
 #ifndef GBM_FORMAT_ABGR16161616F
 #define GBM_FORMAT_ABGR16161616F __gbm_fourcc_code('A', 'B', '4', 'H') /* [63:0] A:B:G:R 16:16:16:16 little endian */
