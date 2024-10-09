@@ -4880,29 +4880,21 @@ void vrend_clear(struct vrend_context *ctx, unsigned buffers,
                        buffers, colorf, depth, stencil);
 
    if (buffers & PIPE_CLEAR_COLOR) {
-      uint32_t mask = 0;
-      int i;
-      for (i = 0; i < sub_ctx->nr_cbufs; i++) {
-         if (sub_ctx->surf[i])
-            mask |= (1 << i);
+      uint32_t mask = (buffers >> 2) & ((1 << PIPE_MAX_COLOR_BUFS) - 1);
+
+      while (mask) {
+         int i = u_bit_scan(&mask);
+
+         if (!sub_ctx->surf[i])
+            continue;
+
+         if (util_format_is_pure_uint(sub_ctx->surf[i]->format))
+            glClearBufferuiv(GL_COLOR, i, (GLuint *)colorf);
+         else if (util_format_is_pure_sint(sub_ctx->surf[i]->format))
+            glClearBufferiv(GL_COLOR, i, (GLint *)colorf);
+         else
+            glClearBufferfv(GL_COLOR, i, (GLfloat *)colorf);
       }
-      if (mask != (buffers >> 2)) {
-         mask = buffers >> 2;
-         while (mask) {
-            i = u_bit_scan(&mask);
-            if (i < PIPE_MAX_COLOR_BUFS && sub_ctx->surf[i] &&
-                util_format_is_pure_uint(sub_ctx->surf[i] &&
-                                         sub_ctx->surf[i]->format))
-                glClearBufferuiv(GL_COLOR, i, (GLuint *)colorf);
-            else if (i < PIPE_MAX_COLOR_BUFS && sub_ctx->surf[i] &&
-                     util_format_is_pure_sint(sub_ctx->surf[i] &&
-                                              sub_ctx->surf[i]->format))
-                glClearBufferiv(GL_COLOR, i, (GLint *)colorf);
-            else
-                glClearBufferfv(GL_COLOR, i, (GLfloat *)colorf);
-         }
-      } else
-         bits |= GL_COLOR_BUFFER_BIT;
    }
    if (buffers & PIPE_CLEAR_DEPTH)
       bits |= GL_DEPTH_BUFFER_BIT;
