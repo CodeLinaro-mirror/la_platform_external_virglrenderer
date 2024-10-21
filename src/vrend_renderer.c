@@ -1271,6 +1271,10 @@ static void init_features(int gl_ver, int gles_ver)
          }
       }
    }
+
+   if (has_feature(feat_egl_image_storage)) {
+      clear_feature(feat_egl_image_storage);
+   }
 }
 
 static void vrend_destroy_surface(struct vrend_surface *surf)
