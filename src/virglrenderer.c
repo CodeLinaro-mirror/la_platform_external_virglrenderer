@@ -20,6 +20,9 @@
  * ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
  * OTHER DEALINGS IN THE SOFTWARE.
  *
+ * Changes from Qualcomm Technologies, Inc. are provided under the following license:
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries. 
+ * SPDX-License-Identifier: BSD-3-Clause-Clear
  **************************************************************************/
 
 #include <stdio.h>
@@ -408,6 +411,37 @@ void virgl_renderer_resource_detach_iov(int res_handle, struct iovec **iov_p, in
       *num_iovs_p = res->iov_count;
 
    virgl_resource_detach_iov(res);
+}
+
+int virgl_renderer_resource_attach_dmabuf(int res_handle, int fd)
+{
+   TRACE_FUNC();
+   struct virgl_resource *res = virgl_resource_lookup(res_handle);
+   if (!res)
+      return EINVAL;
+
+   if (res->fd != -1 || res->fd_type != VIRGL_RESOURCE_FD_INVALID)
+      return EINVAL;
+
+   /* Setting fd for Venus import without ownership transfer */
+   res->fd = fd;
+   res->fd_type = VIRGL_RESOURCE_FD_DMABUF;
+   res->map_size = lseek(fd, 0, SEEK_END);
+
+   return 0;
+}
+
+void virgl_renderer_resource_detach_dmabuf(int res_handle)
+{
+   TRACE_FUNC();
+   struct virgl_resource *res = virgl_resource_lookup(res_handle);
+   if (!res)
+      return;
+
+   /* Ownership remains on client side so just unset fd */
+   res->fd = -1;
+   res->fd_type = VIRGL_RESOURCE_FD_INVALID;
+   res->map_size = 0;
 }
 
 int virgl_renderer_create_fence(int client_fence_id, UNUSED uint32_t ctx_id)

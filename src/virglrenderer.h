@@ -20,6 +20,9 @@
  * ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
  * OTHER DEALINGS IN THE SOFTWARE.
  *
+ * Changes from Qualcomm Technologies, Inc. are provided under the following license:
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries. 
+ * SPDX-License-Identifier: BSD-3-Clause-Clear
  **************************************************************************/
 
 /* library interface from QEMU to virglrenderer */
@@ -331,6 +334,9 @@ VIRGL_EXPORT void virgl_renderer_fill_caps(uint32_t set, uint32_t version,
 VIRGL_EXPORT int virgl_renderer_resource_attach_iov(int res_handle, struct iovec *iov,
                                                     int num_iovs);
 VIRGL_EXPORT void virgl_renderer_resource_detach_iov(int res_handle, struct iovec **iov, int *num_iovs);
+
+VIRGL_EXPORT int virgl_renderer_resource_attach_dmabuf(int res_handle, int fd);
+VIRGL_EXPORT void virgl_renderer_resource_detach_dmabuf(int res_handle);
 
 VIRGL_EXPORT int virgl_renderer_create_fence(int client_fence_id, uint32_t ctx_id);
 
