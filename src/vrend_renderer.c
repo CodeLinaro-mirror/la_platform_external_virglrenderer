@@ -13611,6 +13611,15 @@ int vrend_renderer_export_ctx0_fence(uint32_t fence_id, int* out_fd) {
       /* consider signaled when no active ctx0 fence at all */
       if (!found && !seen_first)
          found = true;
+
+      /* last resort */
+      if (!found) {
+         if (vrend_state.fence_waiting
+            && vrend_state.fence_waiting->fence_id == fence_id) {
+            found = true;
+            fence = vrend_state.fence_waiting;
+         }
+      }
    }
 
    if (found) {
