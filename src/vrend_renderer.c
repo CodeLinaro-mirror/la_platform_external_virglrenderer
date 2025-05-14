@@ -1000,6 +1000,11 @@ bool vrend_format_is_bgra(enum virgl_formats format) {
            format == VIRGL_FORMAT_B8G8R8A8_SRGB);
 }
 
+static bool vrend_format_is_rgba(enum virgl_formats format) {
+   return (format == VIRGL_FORMAT_R8G8B8A8_UNORM ||
+           format == VIRGL_FORMAT_R8G8B8X8_UNORM);
+}
+
 static GLuint vrend_resource_get_internal_format_override(const struct vrend_resource *res)
 {
    /* Some shared resources imported to guest mesa as EGL images occupy 24bpp instead of more common 32bpp.
@@ -1034,7 +1039,7 @@ static bool vrend_resource_supports_view(const struct vrend_resource *res,
     * For views that don't require colorspace conversion, we can add swizzles
     * instead. For views that do require colorspace conversion, manual srgb
     * decode/encode is required. */
-   return !(vrend_format_is_bgra(res->base.format) &&
+   return !((vrend_format_is_bgra(res->base.format) || vrend_format_is_rgba(res->base.format)) &&
             has_bit(res->storage_bits, VREND_STORAGE_EGL_IMAGE)) &&
          (vrend_resource_get_internal_format_override(res) == GL_NONE);
 }
