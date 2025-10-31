@@ -422,7 +422,6 @@ int virgl_renderer_resource_attach_dmabuf(int res_handle, int fd)
    if (res->fd != -1 || res->fd_type != VIRGL_RESOURCE_FD_INVALID)
       return EINVAL;
 
-   /* Setting fd for Venus import without ownership transfer */
    res->fd = fd;
    res->fd_type = VIRGL_RESOURCE_FD_DMABUF;
    res->map_size = lseek(fd, 0, SEEK_END);
@@ -437,7 +436,7 @@ void virgl_renderer_resource_detach_dmabuf(int res_handle)
    if (!res)
       return;
 
-   /* Ownership remains on client side so just unset fd */
+   close(res->fd);
    res->fd = -1;
    res->fd_type = VIRGL_RESOURCE_FD_INVALID;
    res->map_size = 0;
