@@ -20,6 +20,9 @@
  * ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
  * OTHER DEALINGS IN THE SOFTWARE.
  *
+ * Changes from Qualcomm Technologies, Inc. are provided under the following license:
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries. 
+ * SPDX-License-Identifier: BSD-3-Clause-Clear
  **************************************************************************/
 #ifdef HAVE_CONFIG_H
 #include "config.h"
@@ -423,7 +426,7 @@ static inline bool has_feature(enum features_id feature_id)
    VREND_DEBUG(dbg_feature_use, NULL, "Try using feature %s:%d\n",
                feature_list[feature_id].log_name,
                retval);
-   return retval;
+   return (feature_id != feat_dual_src_blend) && retval;
 }
 
 
