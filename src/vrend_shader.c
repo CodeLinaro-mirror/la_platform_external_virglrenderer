@@ -20,6 +20,9 @@
  * ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
  * OTHER DEALINGS IN THE SOFTWARE.
  *
+ * Changes from Qualcomm Technologies, Inc. are provided under the following license:
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries. 
+ * SPDX-License-Identifier: BSD-3-Clause-Clear
  **************************************************************************/
 
 #include "tgsi/tgsi_info.h"
@@ -2531,7 +2534,23 @@ static void emit_fog_fixup_write(const struct dump_ctx *ctx,
 #define emit_op1(op) emit_buff(&ctx->glsl_strbufs, "%s = %s(%s(%s(%s))%s);\n", dsts[0], get_string(dinfo.dstconv), get_string(dinfo.dtypeprefix), op, srcs[0], writemask)
 #define emit_compare(op) emit_buff(&ctx->glsl_strbufs, "%s = %s(%s((%s(%s(%s), %s(%s))))%s);\n", dsts[0], get_string(dinfo.dstconv), get_string(dinfo.dtypeprefix), op, get_string(sinfo.svec4), srcs[0], get_string(sinfo.svec4), srcs[1], writemask)
 
-#define emit_ucompare(op) emit_buff(&ctx->glsl_strbufs, "%s = %s(uintBitsToFloat(%s(%s(%s(%s), %s(%s))%s) * %s(0xffffffff)));\n", dsts[0], get_string(dinfo.dstconv), get_string(dinfo.udstconv), op, get_string(sinfo.svec4), srcs[0], get_string(sinfo.svec4), srcs[1], writemask, get_string(dinfo.udstconv))
+#define emit_ucompare(op)                                       \
+    emit_buff(&ctx->glsl_strbufs,                               \
+        "%s = %s(%s(%s(%s), %s(%s))%s);\n"                      \
+        "%s = %s(uintBitsToFloat(%s(%s) * %s(0xffffffff)));\n", \
+        dsts[0],                                                \
+        get_string(dinfo.dstconv),                              \
+        op,                                                     \
+        get_string(sinfo.svec4),                                \
+        srcs[0],                                                \
+        get_string(sinfo.svec4),                                \
+        srcs[1],                                                \
+        writemask,                                              \
+        dsts[0],                                                \
+        get_string(dinfo.dstconv),                              \
+        get_string(dinfo.udstconv),                             \
+        dsts[0],                                                \
+        get_string(dinfo.udstconv))
 
 static void handle_vertex_proc_exit(const struct dump_ctx *ctx,
                                     struct vrend_glsl_strbufs *glsl_strbufs,
