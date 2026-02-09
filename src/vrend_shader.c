@@ -7444,11 +7444,17 @@ static void emit_ios_per_vertex_out(const struct dump_ctx *ctx,
    int clip_dist = ctx->num_clip_dist_prop ? ctx->num_clip_dist_prop : ctx->key->num_out_clip;
    int cull_dist = ctx->num_cull_dist_prop ? ctx->num_cull_dist_prop : ctx->key->num_out_cull;
    int num_clip_cull = clip_dist + cull_dist;
+   bool clip_dist_sizing_required =  ctx->is_last_vertex_stage &&
+	   (glsl_strbufs->required_sysval_uniform_decls & BIT(UNIFORM_CLIP_PLANE));
+
 
    if (ctx->num_out_clip_dist && !num_clip_cull)
       clip_dist = ctx->num_out_clip_dist;
 
-   if (ctx->key->use_pervertex_in) {
+   if (clip_dist_sizing_required && clip_dist < VIRGL_NUM_CLIP_PLANES)
+	   clip_dist = VIRGL_NUM_CLIP_PLANES;
+
+   if (ctx->key->use_pervertex_in || clip_dist_sizing_required) {
       char clip_var[64] = "", cull_var[64] = "";
       if (cull_dist)
          snprintf(cull_var, 64, "float gl_CullDistance[%d];\n", cull_dist);
