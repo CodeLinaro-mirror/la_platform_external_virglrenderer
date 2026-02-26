@@ -2346,6 +2346,10 @@ static void vrend_destroy_streamout_object(struct vrend_streamout_object *obj)
       vrend_so_target_reference(&obj->so_targets[i], NULL);
    if (has_feature(feat_transform_feedback2))
       glDeleteTransformFeedbacks(1, &obj->id);
+   if (obj->xfb_shdwbuf_id) {
+      glDeleteBuffers(1, &obj->xfb_shdwbuf_id);
+      obj->xfb_shdwbuf_id = 0;
+   }
    FREE(obj);
 }
 
@@ -7904,6 +7908,11 @@ static void vrend_destroy_sub_context(struct vrend_sub_context *sub)
 
    list_for_each_entry_safe(struct vrend_streamout_object, obj, &sub->streamout_list, head)
       vrend_destroy_streamout_object(obj);
+
+   if (sub->xfb_query_id) {
+      glDeleteQueries(1, &sub->xfb_query_id);
+      sub->xfb_query_id = 0;
+   }
 
    vrend_shader_state_reference(&sub->shaders[PIPE_SHADER_VERTEX], NULL);
    vrend_shader_state_reference(&sub->shaders[PIPE_SHADER_FRAGMENT], NULL);
