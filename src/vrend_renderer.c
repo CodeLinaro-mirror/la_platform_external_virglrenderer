@@ -2123,8 +2123,9 @@ static bool vrend_link_separable_shader(struct vrend_sub_context *sub_ctx,
    shader->is_linked = vrend_link(shader->program_id);
 
    if (!shader->is_linked) {
-      /* dump shaders */
-      vrend_report_context_error(sub_ctx->parent, VIRGL_ERROR_CTX_ILLEGAL_SHADER, 0);
+      /* dump shaders — don't poison the context, just log and drop draw calls
+       * that use this program */
+      virgl_error("Separable shader link failed, draw calls using this shader will be dropped\n");
       vrend_shader_dump(shader);
    }
 
@@ -2282,8 +2283,9 @@ static struct vrend_linked_shader_program *add_shader_program(struct vrend_sub_c
 
       free(sprog);
 
-      /* dump shaders */
-      vrend_report_context_error(sub_ctx->parent, VIRGL_ERROR_CTX_ILLEGAL_SHADER, 0);
+      /* dump shaders — don't poison the context, just log and drop draw calls
+       * that use this program */
+      virgl_error("Shader program link failed, draw calls using this program will be dropped\n");
       vrend_shader_dump(vs);
       if (tcs)
          vrend_shader_dump(tcs);
