@@ -5359,6 +5359,39 @@ static int vrend_draw_bind_samplers_shader(struct vrend_sub_context *sub_ctx,
             }
          }
       }
+
+      /* Re-issue glTexBuffer(Range) on every draw for TBO samplers regardless
+       * of the dirty bit.  Per the OpenGL ES spec, when the data store of a
+       * buffer object is modified the buffer texture must be respecified to
+       * reflect the new contents.  virglrenderer has no back-reference from a
+       * buffer resource to its TBO texture objects, so it cannot respecify on
+       * buffer update.  Instead we respecify unconditionally before every draw
+       * to ensure the sampler always sees current buffer data. */
+      if (tview && tview->texture &&
+          has_bit(tview->texture->storage_bits, VREND_STORAGE_GL_BUFFER)) {
+         GLenum internalformat = tex_conv_table[tview->format].internalformat;
+         if (internalformat == GL_NONE ||
+             (vrend_state.use_gles && internalformat == GL_ALPHA8))
+            internalformat = vrend_get_arb_format(tview->format);
+
+         glActiveTexture(GL_TEXTURE0 + next_sampler_id);
+         glBindTexture(GL_TEXTURE_BUFFER, tview->texture->tbo_tex_id);
+
+         if (has_feature(feat_texture_buffer_range)) {
+            unsigned offset = tview->u.buf.first_element;
+            unsigned size = tview->u.buf.last_element - tview->u.buf.first_element + 1;
+            int blsize = util_format_get_blocksize(tview->format);
+            if (offset + size > vrend_state.max_texture_buffer_size)
+               size = vrend_state.max_texture_buffer_size - offset;
+            offset *= blsize;
+            size *= blsize;
+            glTexBufferRange(GL_TEXTURE_BUFFER, internalformat,
+                             tview->texture->gl_id, offset, size);
+         } else {
+            glTexBuffer(GL_TEXTURE_BUFFER, internalformat,
+                        tview->texture->gl_id);
+         }
+      }
       sampler_index++;
       next_sampler_id++;
    }
