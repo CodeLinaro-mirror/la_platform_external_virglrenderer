@@ -4794,7 +4794,22 @@ get_source_info(struct dump_ctx *ctx,
             get_tesslevel_as_source(src_buf, prefix, input->glsl_name, &src->Register);
          } else {
             enum vrend_type_qualifier srcstypeprefix = stypeprefix;
-            if (input->type != VEC_FLOAT) {
+
+            if (input->type == VEC_FLOAT &&
+               ctx->prog_type == TGSI_PROCESSOR_VERTEX &&
+               i == 0) {
+
+               bool src1_is_imm = inst->Src[1].Register.File == TGSI_FILE_IMMEDIATE;
+               bool splat = src->Register.SwizzleX == src->Register.SwizzleY &&
+                            src->Register.SwizzleX == src->Register.SwizzleZ &&
+                            src->Register.SwizzleX == src->Register.SwizzleW;
+
+               if (src1_is_imm &&
+                   ((inst->Instruction.Opcode == TGSI_OPCODE_SHL && !splat) ||
+                    inst->Instruction.Opcode == TGSI_OPCODE_UMUL)) {
+                    srcstypeprefix = (stype == TGSI_TYPE_SIGNED) ? IVEC4 : UVEC4;
+               }
+            } else if (input->type != VEC_FLOAT) {
                if (stype == TGSI_TYPE_UNSIGNED)
                   srcstypeprefix = UVEC4;
                else if (stype == TGSI_TYPE_SIGNED)
