@@ -12818,33 +12818,36 @@ static void vrend_renderer_fill_caps_v2(int gl_ver, int gles_ver,  union virgl_c
 
    if (has_feature(feat_atomic_counters)) {
 
-      /* On GLES hosts we want atomics to be lowered to SSBOs */
-      if (gl_ver > 0) {
-         glGetIntegerv(GL_MAX_VERTEX_ATOMIC_COUNTERS,
-                       (GLint*)(caps->v2.max_atomic_counters + PIPE_SHADER_VERTEX));
-         glGetIntegerv(GL_MAX_FRAGMENT_ATOMIC_COUNTERS,
-                       (GLint*)(caps->v2.max_atomic_counters + PIPE_SHADER_FRAGMENT));
+      /* Report real atomic counter limits to the guest.  The basic
+       * atomicCounterIncrement/Decrement operations are GLES 3.1 core and
+       * work natively on GLES hosts.  Extended ARB ops (atomicCounterAdd
+       * etc.) are gated separately via VIRGL_CAP_V2_SHADER_ATOMIC_COUNTER_OPS
+       * and are only advertised on desktop GL hosts that support
+       * GL_ARB_shader_atomic_counter_ops. */
+      glGetIntegerv(GL_MAX_VERTEX_ATOMIC_COUNTERS,
+                    (GLint*)(caps->v2.max_atomic_counters + PIPE_SHADER_VERTEX));
+      glGetIntegerv(GL_MAX_FRAGMENT_ATOMIC_COUNTERS,
+                    (GLint*)(caps->v2.max_atomic_counters + PIPE_SHADER_FRAGMENT));
 
-         if (has_feature(feat_geometry_shader)) {
-            glGetIntegerv(GL_MAX_GEOMETRY_ATOMIC_COUNTERS,
-                          (GLint*)(caps->v2.max_atomic_counters + PIPE_SHADER_GEOMETRY));
-         }
-
-         if (has_feature(feat_tessellation)) {
-            glGetIntegerv(GL_MAX_TESS_CONTROL_ATOMIC_COUNTERS,
-                          (GLint*)(caps->v2.max_atomic_counters + PIPE_SHADER_TESS_CTRL));
-            glGetIntegerv(GL_MAX_TESS_EVALUATION_ATOMIC_COUNTERS,
-                          (GLint*)(caps->v2.max_atomic_counters + PIPE_SHADER_TESS_EVAL));
-         }
-
-         if (has_feature(feat_compute_shader)) {
-            glGetIntegerv(GL_MAX_COMPUTE_ATOMIC_COUNTERS,
-                          (GLint*)(caps->v2.max_atomic_counters + PIPE_SHADER_COMPUTE));
-         }
-
-         glGetIntegerv(GL_MAX_COMBINED_ATOMIC_COUNTERS,
-                       (GLint*)&caps->v2.max_combined_atomic_counters);
+      if (has_feature(feat_geometry_shader)) {
+         glGetIntegerv(GL_MAX_GEOMETRY_ATOMIC_COUNTERS,
+                       (GLint*)(caps->v2.max_atomic_counters + PIPE_SHADER_GEOMETRY));
       }
+
+      if (has_feature(feat_tessellation)) {
+         glGetIntegerv(GL_MAX_TESS_CONTROL_ATOMIC_COUNTERS,
+                       (GLint*)(caps->v2.max_atomic_counters + PIPE_SHADER_TESS_CTRL));
+         glGetIntegerv(GL_MAX_TESS_EVALUATION_ATOMIC_COUNTERS,
+                       (GLint*)(caps->v2.max_atomic_counters + PIPE_SHADER_TESS_EVAL));
+      }
+
+      if (has_feature(feat_compute_shader)) {
+         glGetIntegerv(GL_MAX_COMPUTE_ATOMIC_COUNTERS,
+                       (GLint*)(caps->v2.max_atomic_counters + PIPE_SHADER_COMPUTE));
+      }
+
+      glGetIntegerv(GL_MAX_COMBINED_ATOMIC_COUNTERS,
+                    (GLint*)&caps->v2.max_combined_atomic_counters);
 
       glGetIntegerv(GL_MAX_VERTEX_ATOMIC_COUNTER_BUFFERS,
                     (GLint*)(caps->v2.max_atomic_counter_buffers + PIPE_SHADER_VERTEX));
