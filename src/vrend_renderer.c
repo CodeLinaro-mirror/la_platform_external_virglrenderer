@@ -751,6 +751,13 @@ struct vrend_sub_context {
    struct vrend_surface *zsurf;
    struct vrend_surface *surf[PIPE_MAX_COLOR_BUFS];
 
+   bool fb_no_attach;
+   GLuint fb_no_attach_fbo_id;
+   GLuint fb_no_attach_rbo_id;
+   uint32_t fb_no_attach_width;
+   uint32_t fb_no_attach_height;
+   uint32_t fb_no_attach_samples;
+
    struct vrend_viewport vps[PIPE_MAX_VIEWPORTS];
    /* viewport is negative */
    uint32_t scissor_state_dirty;
@@ -3342,9 +3349,11 @@ void vrend_set_framebuffer_state(struct vrend_context *ctx,
    GLint new_height = -1;
    bool new_fbo_origin_upper_left = false;
 
+   bool was_no_attach = ctx->sub->fb_no_attach;
    struct vrend_sub_context *sub_ctx = ctx->sub;
 
    glBindFramebuffer(GL_FRAMEBUFFER, sub_ctx->fb_id);
+   sub_ctx->fb_no_attach = false;
 
    if (zsurf_handle) {
       zsurf = vrend_object_lookup(sub_ctx->object_hash, zsurf_handle, VIRGL_OBJECT_SURFACE);
@@ -3388,8 +3397,13 @@ void vrend_set_framebuffer_state(struct vrend_context *ctx,
 
    /* find a buffer to set fb_height from */
    if (sub_ctx->nr_cbufs == 0 && !sub_ctx->zsurf) {
-      new_height = 0;
-      new_fbo_origin_upper_left = false;
+      /* For no-attachment FBOs the height was already set by
+       * vrend_set_framebuffer_state_no_attach; preserve it.
+       * Only reset to 0 if we were not in no-attach mode. */
+      if (!was_no_attach) {
+         new_height = 0;
+         new_fbo_origin_upper_left = false;
+      }
    } else if (sub_ctx->nr_cbufs == 0) {
       new_height = u_minify(sub_ctx->zsurf->texture->base.height0, sub_ctx->zsurf->level);
       new_fbo_origin_upper_left = sub_ctx->zsurf->texture->y_0_top ? true : false;
@@ -3431,23 +3445,100 @@ void vrend_set_framebuffer_state(struct vrend_context *ctx,
    sub_ctx->blend_state_dirty = true;
 }
 
-void vrend_set_framebuffer_state_no_attach(UNUSED struct vrend_context *ctx,
+void vrend_set_framebuffer_state_no_attach(struct vrend_context *ctx,
                                            uint32_t width, uint32_t height,
                                            uint32_t layers, uint32_t samples)
 {
+   struct vrend_sub_context *sub_ctx = ctx->sub;
    int gl_ver = vrend_state.gl_major_ver * 10 + vrend_state.gl_minor_ver;
+   GLenum status;
+   GLint old_renderbuffer_binding = 0;
+   bool has_guest_attachments = sub_ctx->nr_cbufs > 0 || sub_ctx->zsurf;
 
-   if (has_feature(feat_fb_no_attach)) {
-      glFramebufferParameteri(GL_FRAMEBUFFER,
-                              GL_FRAMEBUFFER_DEFAULT_WIDTH, width);
-      glFramebufferParameteri(GL_FRAMEBUFFER,
-                              GL_FRAMEBUFFER_DEFAULT_HEIGHT, height);
-      if (!(vrend_state.use_gles && gl_ver <= 31))
-         glFramebufferParameteri(GL_FRAMEBUFFER,
-                                 GL_FRAMEBUFFER_DEFAULT_LAYERS, layers);
-      glFramebufferParameteri(GL_FRAMEBUFFER,
-                              GL_FRAMEBUFFER_DEFAULT_SAMPLES, samples);
+   /*
+    * Only set up GL state for no-attachment rendering.
+    * When attachments are present, fb_id parameters are irrelevant.
+    */
+   if (has_guest_attachments) {
+      sub_ctx->fb_no_attach = false;
+      return;
    }
+
+   /*
+    * No-attachment FBOs have no surface change that would normally dirty
+    * the renderer framebuffer state. Keep the renderer-side geometry in
+    * sync with the guest default framebuffer parameters so viewport/scissor
+    * conversion uses the updated height.
+    */
+   if (sub_ctx->fb_height != height || sub_ctx->fbo_origin_upper_left) {
+      sub_ctx->fb_height = height;
+      sub_ctx->fbo_origin_upper_left = false;
+      sub_ctx->viewport_state_dirty |= (1 << 0);
+      sub_ctx->scissor_state_dirty  |= (1 << 0);
+   }
+
+   if (!has_feature(feat_fb_no_attach))
+      return;
+
+   /*
+    * Use a dedicated private FBO for no-attachment rendering instead of
+    * the shared sub_ctx->fb_id. This prevents the private renderbuffer
+    * from corrupting COLOR_ATTACHMENT0 state on the shared FBO, which
+    * would break subsequent tests that attach real textures to fb_id.
+    */
+   if (!sub_ctx->fb_no_attach_fbo_id)
+      glGenFramebuffers(1, &sub_ctx->fb_no_attach_fbo_id);
+
+   glBindFramebuffer(GL_FRAMEBUFFER, sub_ctx->fb_no_attach_fbo_id);
+
+   /* Set default geometry on the dedicated FBO. */
+   glFramebufferParameteri(GL_FRAMEBUFFER,
+                           GL_FRAMEBUFFER_DEFAULT_WIDTH, width);
+   glFramebufferParameteri(GL_FRAMEBUFFER,
+                           GL_FRAMEBUFFER_DEFAULT_HEIGHT, height);
+   if (!(vrend_state.use_gles && gl_ver <= 31))
+      glFramebufferParameteri(GL_FRAMEBUFFER,
+                              GL_FRAMEBUFFER_DEFAULT_LAYERS, layers);
+   glFramebufferParameteri(GL_FRAMEBUFFER,
+                           GL_FRAMEBUFFER_DEFAULT_SAMPLES, samples);
+
+   /* Reallocate the private rbo when dimensions or sample count change. */
+   if (sub_ctx->fb_no_attach_rbo_id &&
+       (sub_ctx->fb_no_attach_width  != width  ||
+        sub_ctx->fb_no_attach_height != height ||
+        sub_ctx->fb_no_attach_samples != samples)) {
+      glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0,
+                                GL_RENDERBUFFER, 0);
+      glDeleteRenderbuffers(1, &sub_ctx->fb_no_attach_rbo_id);
+      sub_ctx->fb_no_attach_rbo_id  = 0;
+      sub_ctx->fb_no_attach_width   = 0;
+      sub_ctx->fb_no_attach_height  = 0;
+      sub_ctx->fb_no_attach_samples = 0;
+   }
+
+   if (!sub_ctx->fb_no_attach_rbo_id) {
+      glGenRenderbuffers(1, &sub_ctx->fb_no_attach_rbo_id);
+      glGetIntegerv(GL_RENDERBUFFER_BINDING, &old_renderbuffer_binding);
+      glBindRenderbuffer(GL_RENDERBUFFER, sub_ctx->fb_no_attach_rbo_id);
+      if (samples)
+         glRenderbufferStorageMultisample(GL_RENDERBUFFER, samples, GL_R8,
+                                         width, height);
+      else
+         glRenderbufferStorage(GL_RENDERBUFFER, GL_R8, width, height);
+      glBindRenderbuffer(GL_RENDERBUFFER, old_renderbuffer_binding);
+      sub_ctx->fb_no_attach_width   = width;
+      sub_ctx->fb_no_attach_height  = height;
+      sub_ctx->fb_no_attach_samples = samples;
+   }
+
+   glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0,
+                             GL_RENDERBUFFER, sub_ctx->fb_no_attach_rbo_id);
+   sub_ctx->fb_no_attach = true;
+
+   status = glCheckFramebufferStatus(GL_FRAMEBUFFER);
+   if (status != GL_FRAMEBUFFER_COMPLETE)
+      virgl_error("Failed to complete no-attachment framebuffer 0x%x %s\n",
+                  status, ctx->debug_name);
 }
 
 /*
@@ -5005,6 +5096,14 @@ void vrend_clear(struct vrend_context *ctx, unsigned buffers,
    if (sub_ctx->viewport_state_dirty)
       vrend_update_viewport_state(sub_ctx);
 
+   /* For no-attachment rendering the dedicated FBO must be current.
+    * vrend_set_framebuffer_state_no_attach leaves fb_id bound after setup,
+    * so re-bind the dedicated FBO here before clearing.
+    * For normal rendering fb_id is already bound from
+    * vrend_set_framebuffer_state — no extra GL call needed. */
+   if (sub_ctx->fb_no_attach && sub_ctx->fb_no_attach_fbo_id)
+      glBindFramebuffer(GL_FRAMEBUFFER, sub_ctx->fb_no_attach_fbo_id);
+
    vrend_use_program(ctx->sub, NULL);
 
    glDisable(GL_SCISSOR_TEST);
@@ -6161,6 +6260,11 @@ int vrend_draw_vbo(struct vrend_context *ctx,
 
    if (ctx->sub->blend_state_dirty)
       vrend_patch_blend_state(sub_ctx);
+
+   /* For no-attachment rendering, ensure the dedicated FBO is bound.
+    * Only fires when fb_no_attach=true; zero GL calls for normal rendering. */
+   if (sub_ctx->fb_no_attach && sub_ctx->fb_no_attach_fbo_id)
+      glBindFramebuffer(GL_FRAMEBUFFER, sub_ctx->fb_no_attach_fbo_id);
 
    // enable primitive-mode-dependent shader variants
    if (sub_ctx->prim_mode != (int)info->mode) {
@@ -8179,6 +8283,19 @@ static void vrend_destroy_sub_context(struct vrend_sub_context *sub)
       if (sub->long_shader_in_progress[type])
          vrend_destroy_long_shader_buffer(sub->long_shader_in_progress[type]);
    }
+
+   if (sub->fb_no_attach_rbo_id) {
+      glDeleteRenderbuffers(1, &sub->fb_no_attach_rbo_id);
+      sub->fb_no_attach_rbo_id  = 0;
+   }
+   if (sub->fb_no_attach_fbo_id) {
+      glDeleteFramebuffers(1, &sub->fb_no_attach_fbo_id);
+      sub->fb_no_attach_fbo_id  = 0;
+   }
+   sub->fb_no_attach         = false;
+   sub->fb_no_attach_width   = 0;
+   sub->fb_no_attach_height  = 0;
+   sub->fb_no_attach_samples = 0;
 
    if (sub->zsurf)
       vrend_surface_reference(&sub->zsurf, NULL);
