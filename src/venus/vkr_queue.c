@@ -562,7 +562,22 @@ vkr_dispatch_vkWaitSemaphoreResourceMESA(
    };
    VkResult result = vk->GetSemaphoreFdKHR(args->device, &info, &fd);
    if (result != VK_SUCCESS) {
-      vkr_context_set_fatal(ctx);
+      /* TODO: This is workaround this code should not be merged */
+      /* The proprietary Adreno driver violates the Vulkan spec:
+       * vkGetSemaphoreFdKHR for SYNC_FD is only permitted to fail with
+       * VK_ERROR_TOO_MANY_OBJECTS or VK_ERROR_OUT_OF_HOST_MEMORY for
+       * genuine resource exhaustion. When the semaphore has no pending
+       * GPU work the spec requires VK_SUCCESS with fd=-1 (already-signaled
+       * convention, see vn_sync_valid_fd() in vn_queue.c). Instead the
+       * driver returns VK_ERROR_OUT_OF_HOST_MEMORY with fd=-1.
+       *
+       * Since fd=-1 is confirmed (no fd leak), treat this identically to
+       * VK_SUCCESS + fd=-1: semaphore has no pending work, nothing to wait
+       * on. Do not mark the context fatal.
+       */
+      if (fd != -1)
+         vkr_context_set_fatal(ctx);
+
       return;
    }
 
