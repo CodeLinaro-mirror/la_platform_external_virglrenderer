@@ -5091,12 +5091,38 @@ get_source_info(struct dump_ctx *ctx,
                case TGSI_SEMANTIC_PRIMID:
                case TGSI_SEMANTIC_VERTICESIN:
                case TGSI_SEMANTIC_INVOCATIONID:
-               case TGSI_SEMANTIC_SAMPLEID:
                   if (inst->Instruction.Opcode == TGSI_OPCODE_INTERP_SAMPLE && i == 1)
                      strbuf_fmt(src_buf, "ivec4(%s)", ctx->system_values[j].glsl_name);
                   else
                      strbuf_fmt(src_buf, "%s(vec4(intBitsToFloat(%s)))", get_string(stypeprefix), ctx->system_values[j].glsl_name);
                   break;
+               case TGSI_SEMANTIC_SAMPLEID: {
+                  /* gl_SampleID is an integer; use direct casts instead of
+                   * intBitsToFloat reinterpretation.  When used as src[1] of
+                   * INTERP_SAMPLE, interpolateAtSample() requires an int. */
+                  if (inst->Instruction.Opcode == TGSI_OPCODE_INTERP_SAMPLE && i == 1) {
+                     strbuf_fmt(src_buf, "ivec4(%s)", ctx->system_values[j].glsl_name);
+                  } else {
+                     switch (stypeprefix) {
+                     case FLOAT_BITS_TO_UINT:
+                        strbuf_fmt(src_buf, "uvec4(uint(%s))", ctx->system_values[j].glsl_name);
+                        break;
+                     case FLOAT_BITS_TO_INT:
+                        strbuf_fmt(src_buf, "ivec4(%s)", ctx->system_values[j].glsl_name);
+                        break;
+                     case TYPE_CONVERSION_NONE:
+                        /* Float destination: direct cast avoids bit-reinterpretation. */
+                        strbuf_fmt(src_buf, "vec4(float(%s))", ctx->system_values[j].glsl_name);
+                        break;
+                     default:
+                        virgl_error("Unexpected stypeprefix %d for TGSI_SEMANTIC_SAMPLEID\n",
+                                    stypeprefix);
+                        strbuf_fmt(src_buf, "vec4(float(%s))", ctx->system_values[j].glsl_name);
+                        break;
+                     }
+                  }
+                  break;
+               }
                case TGSI_SEMANTIC_HELPER_INVOCATION:
                   strbuf_fmt(src_buf, "uvec4(%s)", ctx->system_values[j].glsl_name);
                   break;
