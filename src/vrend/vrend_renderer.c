@@ -999,6 +999,108 @@ static bool vrend_format_is_rgba(enum virgl_formats format) {
            format == VIRGL_FORMAT_R8G8B8X8_UNORM);
 }
 
+/*
+ * Returns true if the virgl format is a signed-integer format
+ */
+static bool
+vrend_format_is_pure_sint(enum virgl_formats fmt)
+{
+   switch (fmt) {
+   /* 8-bit signed integer */
+   case VIRGL_FORMAT_R8_SINT:
+   case VIRGL_FORMAT_R8G8_SINT:
+   case VIRGL_FORMAT_R8G8B8_SINT:
+   case VIRGL_FORMAT_R8G8B8A8_SINT:
+   case VIRGL_FORMAT_R8G8B8X8_SINT:
+   case VIRGL_FORMAT_A8_SINT:
+   case VIRGL_FORMAT_I8_SINT:
+   case VIRGL_FORMAT_L8_SINT:
+   case VIRGL_FORMAT_L8A8_SINT:
+   /* 16-bit signed integer */
+   case VIRGL_FORMAT_R16_SINT:
+   case VIRGL_FORMAT_R16G16_SINT:
+   case VIRGL_FORMAT_R16G16B16_SINT:
+   case VIRGL_FORMAT_R16G16B16A16_SINT:
+   case VIRGL_FORMAT_R16G16B16X16_SINT:
+   case VIRGL_FORMAT_A16_SINT:
+   case VIRGL_FORMAT_I16_SINT:
+   case VIRGL_FORMAT_L16_SINT:
+   case VIRGL_FORMAT_L16A16_SINT:
+   /* 32-bit signed integer */
+   case VIRGL_FORMAT_R32_SINT:
+   case VIRGL_FORMAT_R32G32_SINT:
+   case VIRGL_FORMAT_R32G32B32_SINT:
+   case VIRGL_FORMAT_R32G32B32A32_SINT:
+   case VIRGL_FORMAT_R32G32B32X32_SINT:
+   case VIRGL_FORMAT_A32_SINT:
+   case VIRGL_FORMAT_I32_SINT:
+   case VIRGL_FORMAT_L32_SINT:
+   case VIRGL_FORMAT_L32A32_SINT:
+   /* RA signed integer */
+   case VIRGL_FORMAT_R8A8_SINT:
+   case VIRGL_FORMAT_R16A16_SINT:
+   case VIRGL_FORMAT_R32A32_SINT:
+      return true;
+   default:
+      return false;
+   }
+}
+
+/*
+ * Returns true if the virgl format is a unsigned-integer format
+ */
+static bool
+vrend_format_is_pure_uint(enum virgl_formats fmt)
+{
+   switch (fmt) {
+   /* 8-bit unsigned integer */
+   case VIRGL_FORMAT_R8_UINT:
+   case VIRGL_FORMAT_R8G8_UINT:
+   case VIRGL_FORMAT_R8G8B8_UINT:
+   case VIRGL_FORMAT_R8G8B8A8_UINT:
+   case VIRGL_FORMAT_R8G8B8X8_UINT:
+   case VIRGL_FORMAT_A8_UINT:
+   case VIRGL_FORMAT_I8_UINT:
+   case VIRGL_FORMAT_L8_UINT:
+   case VIRGL_FORMAT_L8A8_UINT:
+   /* 16-bit unsigned integer */
+   case VIRGL_FORMAT_R16_UINT:
+   case VIRGL_FORMAT_R16G16_UINT:
+   case VIRGL_FORMAT_R16G16B16_UINT:
+   case VIRGL_FORMAT_R16G16B16A16_UINT:
+   case VIRGL_FORMAT_R16G16B16X16_UINT:
+   case VIRGL_FORMAT_A16_UINT:
+   case VIRGL_FORMAT_I16_UINT:
+   case VIRGL_FORMAT_L16_UINT:
+   case VIRGL_FORMAT_L16A16_UINT:
+   /* 32-bit unsigned integer */
+   case VIRGL_FORMAT_R32_UINT:
+   case VIRGL_FORMAT_R32G32_UINT:
+   case VIRGL_FORMAT_R32G32B32_UINT:
+   case VIRGL_FORMAT_R32G32B32A32_UINT:
+   case VIRGL_FORMAT_R32G32B32X32_UINT:
+   case VIRGL_FORMAT_A32_UINT:
+   case VIRGL_FORMAT_I32_UINT:
+   case VIRGL_FORMAT_L32_UINT:
+   case VIRGL_FORMAT_L32A32_UINT:
+   /* packed unsigned integer */
+   case VIRGL_FORMAT_R10G10B10A2_UINT:
+   case VIRGL_FORMAT_B10G10R10A2_UINT:
+   /* RA unsigned integer */
+   case VIRGL_FORMAT_R8A8_UINT:
+   case VIRGL_FORMAT_R16A16_UINT:
+   case VIRGL_FORMAT_R32A32_UINT:
+   /* stencil (read as uint) */
+   case VIRGL_FORMAT_S8_UINT:
+   case VIRGL_FORMAT_X24S8_UINT:
+   case VIRGL_FORMAT_S8X24_UINT:
+   case VIRGL_FORMAT_X32_S8X24_UINT:
+      return true;
+   default:
+      return false;
+   }
+}
+
 static GLuint vrend_resource_get_internal_format_override(const struct vrend_resource *res)
 {
    /* Some shared resources imported to guest mesa as EGL images occupy 24bpp instead of more common 32bpp.
@@ -2612,12 +2714,23 @@ static inline GLenum convert_min_filter(enum pipe_tex_filter filter, enum pipe_t
 }
 
 static void apply_sampler_border_color(GLuint sampler,
-                                       const GLuint colors[static 4])
+                                       const union pipe_color_union *color,
+                                       enum virgl_formats fmt)
 {
-   if (has_feature(feat_sampler_border_colors)) {
-      glSamplerParameterIuiv(sampler, GL_TEXTURE_BORDER_COLOR, colors);
-   } else if (colors[0] || colors[1] || colors[2] || colors[3]) {
-      virgl_warn("Sampler border color setting requested but not supported\n");
+   if (!has_feature(feat_sampler_border_colors)) {
+      if (color->ui[0] || color->ui[1] || color->ui[2] || color->ui[3])
+         virgl_warn("Sampler border color setting requested but not supported\n");
+      return;
+    }
+
+   if (vrend_format_is_pure_sint(fmt)) {
+      glSamplerParameterIiv(sampler, GL_TEXTURE_BORDER_COLOR,
+                            (const GLint *)color->i);
+   } else if (vrend_format_is_pure_uint(fmt)) {
+      glSamplerParameterIuiv(sampler, GL_TEXTURE_BORDER_COLOR,
+                             (const GLuint *)color->ui);
+   } else {
+      glSamplerParameterfv(sampler, GL_TEXTURE_BORDER_COLOR, color->f);
    }
 }
 
@@ -2662,7 +2775,7 @@ int vrend_create_sampler_state(struct vrend_context *ctx,
             }
          }
 
-         apply_sampler_border_color(state->ids[i], templ->border_color.ui);
+         apply_sampler_border_color(state->ids[i], &templ->border_color, VIRGL_FORMAT_NONE);
          if (has_feature(feat_texture_srgb_decode))
             glSamplerParameteri(state->ids[i], GL_TEXTURE_SRGB_DECODE_EXT,
                                 i == 0 ? GL_SKIP_DECODE_EXT : GL_DECODE_EXT);
@@ -7121,6 +7234,7 @@ void vrend_bind_sampler_states(struct vrend_context *ctx,
    }
 
    for (i = 0; i < num_states; i++) {
+      uint32_t slot = start_slot + i;
       if (handles[i] == 0)
          state = NULL;
       else
