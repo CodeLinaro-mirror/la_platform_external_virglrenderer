@@ -7245,8 +7245,40 @@ void vrend_bind_sampler_states(struct vrend_context *ctx,
 
       if (state)
          state->sub_ctx = ctx->sub;
-      ctx->sub->views[shader_type].samplers[start_slot + i] = state;
-      ctx->sub->views[shader_type].dirty_mask |= (1u << (start_slot + i));
+      ctx->sub->views[shader_type].samplers[slot] = state;
+      ctx->sub->views[shader_type].dirty_mask |= (1u << slot);
+
+      if (state && has_feature(feat_samplers) &&
+          has_feature(feat_sampler_border_colors)) {
+         struct vrend_sampler_view *sview =
+            ctx->sub->views[shader_type].views[slot];
+
+         if (sview) {
+            enum virgl_formats fmt = sview->format;
+            bool gles_alpha_emulated =
+               vrend_state.use_gles &&
+               (fmt == VIRGL_FORMAT_A8_UNORM  ||
+                fmt == VIRGL_FORMAT_A16_UNORM ||
+                fmt == VIRGL_FORMAT_A16_FLOAT ||
+                fmt == VIRGL_FORMAT_A32_FLOAT);
+
+            if (vrend_format_is_pure_sint(fmt) || vrend_format_is_pure_uint(fmt)) {
+               for (int s = 0; s < 2; s++) {
+                  apply_sampler_border_color(state->ids[s],
+                                             &state->base.border_color, fmt);
+               }
+            } else if (vrend_format_is_emulated_alpha(fmt) || gles_alpha_emulated) {
+               union pipe_color_union bc = state->base.border_color;
+               bc.ui[0] = bc.ui[3];
+               bc.ui[1] = 0;
+               bc.ui[2] = 0;
+               bc.ui[3] = 0;
+               for (int s = 0; s < 2; s++) {
+                  apply_sampler_border_color(state->ids[s], &bc, VIRGL_FORMAT_NONE);
+               }
+            }
+         }
+      }
    }
 }
 
@@ -7283,12 +7315,27 @@ static void vrend_apply_sampler_state(struct vrend_sub_context *sub_ctx,
    bool is_emulated_alpha = vrend_format_is_emulated_alpha(tview->format);
    if (has_feature(feat_samplers)) {
       int sampler = sampler_state->ids[tview->srgb_decode == GL_SKIP_DECODE_EXT ? 0 : 1];
-      if (is_emulated_alpha) {
+
+      /*
+       * Alpha-only formats are emulated as GL_R8 with a (0,0,0,R) swizzle.
+       * on GLES that vrend_format_is_emulated_alpha returns false, so we check the format explicitly.
+      */
+      bool needs_alpha_swizzle =
+         is_emulated_alpha ||
+         (vrend_state.use_gles &&
+           (tview->format == VIRGL_FORMAT_A8_UNORM  ||
+           tview->format == VIRGL_FORMAT_A16_UNORM ||
+           tview->format == VIRGL_FORMAT_A16_FLOAT ||
+           tview->format == VIRGL_FORMAT_A32_FLOAT));
+
+      if (needs_alpha_swizzle) {
          union pipe_color_union border_color;
          border_color = state->border_color;
          border_color.ui[0] = border_color.ui[3];
+         border_color.ui[1] = 0;
+         border_color.ui[2] = 0;
          border_color.ui[3] = 0;
-         apply_sampler_border_color(sampler, border_color.ui);
+         apply_sampler_border_color(sampler, &border_color, VIRGL_FORMAT_NONE);
       }
 
       glBindSampler(sampler_id, sampler);
@@ -7351,10 +7398,38 @@ static void vrend_apply_sampler_state(struct vrend_sub_context *sub_ctx,
          union pipe_color_union border_color;
          border_color = state->border_color;
          border_color.ui[0] = border_color.ui[3];
+         border_color.ui[1] = 0;
+         border_color.ui[2] = 0;
          border_color.ui[3] = 0;
-         glTexParameterIuiv(target, GL_TEXTURE_BORDER_COLOR, border_color.ui);
+         glTexParameterfv(target, GL_TEXTURE_BORDER_COLOR, border_color.f);
       } else {
-         glTexParameterIuiv(target, GL_TEXTURE_BORDER_COLOR, state->border_color.ui);
+         enum virgl_formats fmt = tview->format;
+
+         bool gles_alpha_emulated =
+            vrend_state.use_gles &&
+            (fmt == VIRGL_FORMAT_A8_UNORM  ||
+             fmt == VIRGL_FORMAT_A16_UNORM ||
+             fmt == VIRGL_FORMAT_A16_FLOAT ||
+             fmt == VIRGL_FORMAT_A32_FLOAT);
+
+         if (gles_alpha_emulated) {
+            union pipe_color_union border_color;
+            border_color = state->border_color;
+            border_color.ui[0] = border_color.ui[3];
+            border_color.ui[1] = 0;
+            border_color.ui[2] = 0;
+            border_color.ui[3] = 0;
+            glTexParameterfv(target, GL_TEXTURE_BORDER_COLOR, border_color.f);
+         } else if (vrend_format_is_pure_sint(fmt)) {
+            glTexParameterIiv(target, GL_TEXTURE_BORDER_COLOR,
+                          (const GLint *)state->border_color.i);
+         } else if (vrend_format_is_pure_uint(fmt)) {
+            glTexParameterIuiv(target, GL_TEXTURE_BORDER_COLOR,
+                          (const GLuint *)state->border_color.ui);
+         } else {
+            glTexParameterfv(target, GL_TEXTURE_BORDER_COLOR,
+                          state->border_color.f);
+         }
       }
 
    }
