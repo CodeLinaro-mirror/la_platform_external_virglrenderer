@@ -1259,6 +1259,12 @@ void vrend_report_context_error_internal(const char *fname, struct vrend_context
                value);
 }
 
+void vrend_context_reset_error(struct vrend_context *ctx)
+{
+   ctx->in_error = false;
+   ctx->last_error = VIRGL_ERROR_NONE;
+}
+
 #define CORE_PROFILE_WARN_NONE 0
 #define CORE_PROFILE_WARN_STIPPLE 1
 #define CORE_PROFILE_WARN_POLYGON_MODE 2

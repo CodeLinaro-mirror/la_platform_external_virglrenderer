@@ -200,6 +200,7 @@ struct vrend_if_cbs {
 #define VREND_USE_GBM_LAYOUT (1 << 7)
 
 bool vrend_check_no_error(struct vrend_context *ctx);
+void vrend_context_reset_error(struct vrend_context *ctx);
 
 const struct virgl_resource_pipe_callbacks *
 vrend_renderer_get_pipe_callbacks(void);

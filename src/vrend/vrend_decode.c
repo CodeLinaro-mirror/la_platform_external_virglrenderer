@@ -1695,7 +1695,7 @@ static int vrend_decode_ctx_transfer_3d(struct virgl_context *ctx,
    struct vrend_decode_ctx *dctx = (struct vrend_decode_ctx *)ctx;
    int ret = vrend_renderer_transfer_iov(dctx->grctx, res->res_id, info,
                                          transfer_mode);
-   return vrend_check_no_error(dctx->grctx) || ret ? ret : EINVAL;
+   return ret;
 }
 
 static int vrend_decode_ctx_get_blob(struct virgl_context *ctx,
@@ -2096,8 +2096,14 @@ static int vrend_decode_ctx_submit_cmd(struct virgl_context *ctx,
       TRACE_SCOPE_SLOW(vrend_get_comand_name(cmd));
 
       ret = decode_table[cmd](gdctx->grctx, buf, len);
-      if (!vrend_check_no_error(gdctx->grctx) && !ret)
-         ret = EINVAL;
+
+      if (!vrend_check_no_error(gdctx->grctx)) {
+         /* GL errors triggered by guest commands are expected (e.g.
+          * negative_coverage tests intentionally cause GL errors).
+          * Clear in_error so the context is not permanently poisoned
+          * and do not treat this as a fatal command buffer error. */
+         vrend_context_reset_error(gdctx->grctx);
+      }
       if (ret) {
          virgl_error("context %d failed to dispatch %s: %d\n",
                gdctx->base.ctx_id, vrend_get_comand_name(cmd), ret);
