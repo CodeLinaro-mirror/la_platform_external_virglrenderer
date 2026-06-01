@@ -1750,8 +1750,12 @@ static void copy_stream_out_varyings(struct vrend_sub_context *sub_ctx)
          src_off = buf_off + combined_strides*j;
          dst_off = sub_ctx->xfb_shadow_stride[i]*j;
 
-         if (dst_off*sizeof(GLfloat) + sub_ctx->xfb_shadow_stride[i]*sizeof(GLfloat)*num_vertices > so_obj->xfb_shdwbuf_size)
-            return;
+         /* Overflow semantics: discard entire primitive if it doesn't fit in the
+            guest buffer. Check only at primitive boundaries to avoid partial writes. */
+         if (j % num_vertices == 0 &&
+             dst_off*sizeof(GLfloat) + sub_ctx->xfb_shadow_stride[i]*sizeof(GLfloat)*num_vertices
+                > so_obj->so_targets[i]->buffer_size)
+            break;
 
          vrend_resource_buffer_copy_raw(
             so_obj->xfb_shdwbuf_id,
