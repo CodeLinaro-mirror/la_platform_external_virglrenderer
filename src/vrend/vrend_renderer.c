@@ -816,7 +816,8 @@ struct vrend_sub_context {
    uint16_t xfb_shadow_stride[PIPE_MAX_SO_BUFFERS];
    struct vrend_streamout_object *xfb_shadow_so;
    GLenum xfb_shadow_mode;
-   GLuint xfb_query_id;
+   GLuint xfb_query_id;        /* guest-owned TRANSFORM_FEEDBACK_PRIMITIVES_WRITTEN query */
+   GLuint xfb_shadow_query_id; /* internally created query used when guest does not issue one */
 };
 
 struct vrend_untyped_resource {
@@ -1700,7 +1701,6 @@ static void copy_stream_out_varyings(struct vrend_sub_context *sub_ctx)
    uint8_t num_vertices = 1; // default is a point
    uint64_t buf_off = 0;
    GLuint xfb_primitives_written = 0;
-   GLint params = 0;
 
    switch (sub_ctx->xfb_shadow_mode)
    {
@@ -1717,12 +1717,22 @@ static void copy_stream_out_varyings(struct vrend_sub_context *sub_ctx)
    for (uint8_t i = 0; i < PIPE_MAX_SO_BUFFERS && sub_ctx->xfb_shadow_stride[i] != 0; i++)
       combined_strides += sub_ctx->xfb_shadow_stride[i];
 
-   glGetQueryiv(GL_TRANSFORM_FEEDBACK_PRIMITIVES_WRITTEN, GL_CURRENT_QUERY,  &params);
-   if (params != 0)
-      glEndQuery(GL_TRANSFORM_FEEDBACK_PRIMITIVES_WRITTEN);
+   if (!sub_ctx->xfb_query_id && !sub_ctx->xfb_shadow_query_id)
+      return;
+
+   /* Use the shadow query if we created one (guest did not issue BEGIN_QUERY),
+      otherwise use the guest-owned query. */
+   GLuint query_id = sub_ctx->xfb_shadow_query_id
+                     ? sub_ctx->xfb_shadow_query_id
+                     : sub_ctx->xfb_query_id;
 
    // Wait here for the result as well
-   glGetQueryObjectuiv(sub_ctx->xfb_query_id, GL_QUERY_RESULT, &xfb_primitives_written);
+   glGetQueryObjectuiv(query_id, GL_QUERY_RESULT, &xfb_primitives_written);
+
+   if (sub_ctx->xfb_shadow_query_id) {
+      glDeleteQueries(1, &sub_ctx->xfb_shadow_query_id);
+      sub_ctx->xfb_shadow_query_id = 0;
+   }
 
    for (uint8_t i = 0; i < PIPE_MAX_SO_BUFFERS && sub_ctx->xfb_shadow_stride[i] != 0 && (void *) so_obj->so_targets[i] != NULL; i++) {
       for (uint64_t j = 0; j < xfb_primitives_written*num_vertices; j++) {
@@ -6226,8 +6236,8 @@ int vrend_draw_vbo(struct vrend_context *ctx,
 
          glGetQueryiv(GL_TRANSFORM_FEEDBACK_PRIMITIVES_WRITTEN, GL_CURRENT_QUERY, &gl_current_query);
          if (gl_current_query == 0) {
-            glGenQueries(1, &sub_ctx->xfb_query_id);
-            glBeginQuery(GL_TRANSFORM_FEEDBACK_PRIMITIVES_WRITTEN, ctx->sub->xfb_query_id);
+            glGenQueries(1, &sub_ctx->xfb_shadow_query_id);
+            glBeginQuery(GL_TRANSFORM_FEEDBACK_PRIMITIVES_WRITTEN, sub_ctx->xfb_shadow_query_id);
          }
       } else if (sub_ctx->current_so->xfb_state == XFB_STATE_PAUSED) {
          glResumeTransformFeedback();
@@ -8134,9 +8144,9 @@ static void vrend_destroy_sub_context(struct vrend_sub_context *sub)
    list_for_each_entry_safe(struct vrend_streamout_object, obj, &sub->streamout_list, head)
       vrend_destroy_streamout_object(obj);
 
-   if (sub->xfb_query_id) {
-      glDeleteQueries(1, &sub->xfb_query_id);
-      sub->xfb_query_id = 0;
+   if (sub->xfb_shadow_query_id) {
+      glDeleteQueries(1, &sub->xfb_shadow_query_id);
+      sub->xfb_shadow_query_id = 0;
    }
 
    vrend_shader_state_reference(&sub->shaders[PIPE_SHADER_VERTEX], NULL);
@@ -10671,6 +10681,8 @@ void vrend_set_streamout_targets(struct vrend_context *ctx,
    } else {
       if (has_feature(feat_transform_feedback2))
          glBindTransformFeedback(GL_TRANSFORM_FEEDBACK, 0);
+      if (ctx->sub->xfb_shadow_query_id)
+         glEndQuery(GL_TRANSFORM_FEEDBACK_PRIMITIVES_WRITTEN);
       ctx->sub->xfb_shadow_so = ctx->sub->current_so;
       ctx->sub->current_so = NULL;
    }
@@ -12064,10 +12076,11 @@ int vrend_create_query(struct vrend_context *ctx, uint32_t handle,
       vrend_resource_reference(&q->res, NULL);
       FREE(q);
    } else {
-      if (q->gltype == GL_TRANSFORM_FEEDBACK_PRIMITIVES_WRITTEN)
+      if (q->gltype == GL_TRANSFORM_FEEDBACK_PRIMITIVES_WRITTEN) {
          // Copy XFB ID for internal use assuming it frontend will query before
          // fetching XFB data but after XFB end
          ctx->sub->xfb_query_id = q->id;
+      }
    }
 
    return err;
