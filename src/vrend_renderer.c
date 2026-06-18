@@ -3459,7 +3459,6 @@ void vrend_set_framebuffer_state_no_attach(struct vrend_context *ctx,
 {
    struct vrend_sub_context *sub_ctx = ctx->sub;
    int gl_ver = vrend_state.gl_major_ver * 10 + vrend_state.gl_minor_ver;
-   GLenum status;
    GLint old_renderbuffer_binding = 0;
    bool has_guest_attachments = sub_ctx->nr_cbufs > 0 || sub_ctx->zsurf;
 
@@ -3510,6 +3509,21 @@ void vrend_set_framebuffer_state_no_attach(struct vrend_context *ctx,
    glFramebufferParameteri(GL_FRAMEBUFFER,
                            GL_FRAMEBUFFER_DEFAULT_SAMPLES, samples);
 
+   /* Skip RBO setup for zero-size FBOs */
+   if (width == 0 || height == 0) {
+      if (sub_ctx->fb_no_attach_rbo_id) {
+         glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0,
+                                   GL_RENDERBUFFER, 0);
+         glDeleteRenderbuffers(1, &sub_ctx->fb_no_attach_rbo_id);
+         sub_ctx->fb_no_attach_rbo_id  = 0;
+         sub_ctx->fb_no_attach_width   = 0;
+         sub_ctx->fb_no_attach_height  = 0;
+         sub_ctx->fb_no_attach_samples = 0;
+      }
+      sub_ctx->fb_no_attach = true;
+      return;
+   }
+
    /* Reallocate the private rbo when dimensions or sample count change. */
    if (sub_ctx->fb_no_attach_rbo_id &&
        (sub_ctx->fb_no_attach_width  != width  ||
@@ -3542,11 +3556,6 @@ void vrend_set_framebuffer_state_no_attach(struct vrend_context *ctx,
    glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0,
                              GL_RENDERBUFFER, sub_ctx->fb_no_attach_rbo_id);
    sub_ctx->fb_no_attach = true;
-
-   status = glCheckFramebufferStatus(GL_FRAMEBUFFER);
-   if (status != GL_FRAMEBUFFER_COMPLETE)
-      virgl_error("Failed to complete no-attachment framebuffer 0x%x %s\n",
-                  status, ctx->debug_name);
 }
 
 /*
