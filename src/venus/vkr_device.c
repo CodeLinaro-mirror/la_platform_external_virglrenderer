@@ -317,8 +317,13 @@ vkr_device_destroy(struct vkr_context *ctx, struct vkr_device *dev, bool destroy
    if (!list_is_empty(&dev->objects))
       vkr_log("destroying device with valid objects");
 
-   /* only wait if on workder thread to prepare for vk obj cleanup */
-   if (ctx->on_worker_thread) {
+   /* Always wait for device idle before destroying objects.
+    * In process mode (on_worker_thread=false) this is still required so that
+    * the ICD can flush and release all GPU-side resources before the process
+    * exits.  Without this, the Adreno ICD leaves GPU memory allocated and the
+    * next vkCreateDevice call fails with VK_ERROR_OUT_OF_DEVICE_MEMORY.
+    */
+   {
       VkResult result = vk->DeviceWaitIdle(device);
       if (result != VK_SUCCESS)
          vkr_log("vkDeviceWaitIdle(%p) failed(%d)", dev, (int32_t)result);
@@ -341,8 +346,12 @@ vkr_device_destroy(struct vkr_context *ctx, struct vkr_device *dev, bool destroy
 
    mtx_destroy(&dev->free_sync_mutex);
 
-   if (destroy_vk || ctx->on_worker_thread)
-      vk->DestroyDevice(device, NULL);
+   /* Always call vkDestroyDevice so the ICD releases GPU memory back to the
+    * kernel driver.  In process mode destroy_vk and on_worker_thread are both
+    * false during context teardown, but the process is about to exit anyway so
+    * calling DestroyDevice is safe and necessary.
+    */
+   vk->DestroyDevice(device, NULL);
 
    list_del(&dev->base.track_head);
 

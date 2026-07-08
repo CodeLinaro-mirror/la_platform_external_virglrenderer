@@ -258,8 +258,11 @@ vkr_instance_destroy(struct vkr_context *ctx,
                                               instance->validation_messenger, NULL);
    }
 
-   if (destroy_vk || ctx->on_worker_thread)
-      vk->DestroyInstance(instance->base.handle.instance, NULL);
+   /* Always call vkDestroyInstance so the ICD and loader release all
+    * instance-level resources.  In process mode destroy_vk and on_worker_thread
+    * are both false, but the process is about to exit so this is safe.
+    */
+   vk->DestroyInstance(instance->base.handle.instance, NULL);
 
    free(instance->physical_device_handles);
    free(instance->physical_devices);

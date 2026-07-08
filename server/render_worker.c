@@ -413,9 +413,32 @@ render_worker_destroy(struct render_worker_jail *jail, struct render_worker *wor
    thrd_join(worker->thread, NULL);
    worker->reaped = true;
 #else
-   /* kill to make sure the worker exits in finite time */
-   if (!worker->reaped)
-      kill(worker->pid, SIGKILL);
+   if (!worker->reaped) {
+      /* The worker already received socket EOF and is running its own
+       * cleanup (vkr_context_destroy -> vkDestroyDevice etc.).  Give it
+       * time to finish so the ICD can release GPU resources cleanly before
+       * the next vkCreateDevice call.  Only SIGKILL if it does not exit
+       * within the grace period.
+       */
+      bool exited = false;
+      const int grace_ms = 1000;
+      const int poll_ms = 50;
+      for (int i = 0; i < grace_ms / poll_ms; i++) {
+         siginfo_t si = { 0 };
+         if (waitid(P_PID, worker->pid, &si, WEXITED | WNOHANG) == 0 &&
+             si.si_pid == worker->pid) {
+            worker->reaped = true;
+            exited = true;
+            break;
+         }
+         const struct timespec ts = { .tv_nsec = poll_ms * 1000000L };
+         nanosleep(&ts, NULL);
+      }
+      if (!exited) {
+         render_log("render_worker_destroy sigkill!!!");
+         kill(worker->pid, SIGKILL);
+      }
+   }
 #endif
 
    worker->destroyed = true;
