@@ -366,9 +366,9 @@ void trace_end(void **func_name)
 
 void set_dmabuf_name(int fd, const char *name)
 {
-   #ifdef DMA_BUF_SET_NAME_B
+   #ifdef HAVE_DMABUF_H
    if (name && *name != '\0')
-      ioctl(fd, DMA_BUF_SET_NAME_B, name);
+      ioctl(fd, DMA_BUF_SET_NAME, name);
    #else
    (void)fd;
    (void)name;
