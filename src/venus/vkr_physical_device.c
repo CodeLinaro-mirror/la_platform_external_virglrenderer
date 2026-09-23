@@ -158,11 +158,20 @@ vkr_physical_device_init_id_properties(struct vkr_physical_device *physical_dev)
 
    VkPhysicalDevice handle = physical_dev->base.handle.physical_device;
    physical_dev->id_properties.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_ID_PROPERTIES;
+   VkPhysicalDeviceExternalMemoryHostPropertiesEXT host_props = {
+      .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_EXTERNAL_MEMORY_HOST_PROPERTIES_EXT,
+      .pNext = &physical_dev->id_properties,
+   };
    VkPhysicalDeviceProperties2 props2 = {
       .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROPERTIES_2,
-      .pNext = &physical_dev->id_properties
+      .pNext = physical_dev->use_host_memory_import
+                  ? (void *)&host_props
+                  : (void *)&physical_dev->id_properties,
    };
    vk->GetPhysicalDeviceProperties2(handle, &props2);
+
+   physical_dev->min_imported_host_pointer_alignment =
+      host_props.minImportedHostPointerAlignment;
 }
 
 static void
@@ -313,10 +322,8 @@ vkr_physical_device_init_extensions(struct vkr_physical_device *physical_dev)
          physical_dev->EXT_external_memory_dma_buf = true;
       else if (!strcmp(props->extensionName, "VK_KHR_external_fence_fd"))
          physical_dev->KHR_external_fence_fd = true;
-      else if (!strcmp(props->extensionName, "VK_EXT_external_memory_metal"))
-         physical_dev->EXT_external_memory_metal = true;
-      else if (!strcmp(props->extensionName, "VK_EXT_metal_objects"))
-         physical_dev->EXT_metal_objects = true;
+      else if (!strcmp(props->extensionName, "VK_EXT_external_memory_host"))
+         physical_dev->EXT_external_memory_host = true;
       else if (!strcmp(props->extensionName, "VK_KHR_portability_subset"))
          physical_dev->KHR_portability_subset = true;
 
@@ -346,9 +353,9 @@ vkr_physical_device_init_extensions(struct vkr_physical_device *physical_dev)
          physical_dev->KHR_external_fence_fd = false;
    }
 
-   /* On macOS, VK_KHR_external_memory_fd is emulated via Metal shared memory.
-    * MoltenVK doesn't natively support it, but virglrenderer implements
-    * fd-based memory export using Metal buffers backed by POSIX SHM.
+   /* On macOS, VK_KHR_external_memory_fd is emulated with POSIX shm that is
+    * imported as host memory. Neither MoltenVK nor KosmicKrisp supports
+    * fd-based memory export natively.
     *
     * Inject it into the advertised list so the guest Venus driver accepts
     * the physical device (it's a hard requirement in vn_physical_device.c).
@@ -361,7 +368,10 @@ vkr_physical_device_init_extensions(struct vkr_physical_device *physical_dev)
     *
     * TODO: Remove after mesa!40478 has had sufficient distro uptake.
     */
-   if (physical_dev->EXT_external_memory_metal && !physical_dev->KHR_external_memory_fd) {
+   physical_dev->use_host_memory_import = physical_dev->EXT_external_memory_host &&
+                                          !physical_dev->KHR_external_memory_fd &&
+                                          !physical_dev->EXT_external_memory_dma_buf;
+   if (physical_dev->use_host_memory_import) {
       VkExtensionProperties *new_exts =
          realloc(exts, sizeof(*exts) * (advertised_count + 1));
       if (new_exts) {

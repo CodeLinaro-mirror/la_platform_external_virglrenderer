@@ -6,11 +6,13 @@
 #include "vkr_device_memory.h"
 
 #include <math.h>
+#include <sys/mman.h>
+#include <unistd.h>
 
+#include "util/anon_file.h"
 #include "vn_protocol_renderer_transport.h"
 
 #include "vkr_device_memory_gen.h"
-#include "vkr_metal_helpers.h"
 #include "vkr_physical_device.h"
 
 static bool
@@ -244,6 +246,76 @@ vkr_gbm_get_fd_info_from_allocation_info(UNUSED struct vkr_physical_device *phys
 
 #endif /* ENABLE_GBM_ALLOCATION */
 
+/* Map the whole of fd at an address aligned to alignment, which may exceed
+ * what mmap guarantees: reserve a window large enough to hold an aligned
+ * range, map the fd over that range and release the slack around it.
+ */
+static void *
+vkr_shm_map_aligned(int fd, size_t size, size_t alignment)
+{
+   const size_t page_size = getpagesize();
+   if (alignment <= page_size)
+      return mmap(NULL, size, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
+
+   const size_t window_size = size + alignment;
+   uint8_t *window =
+      mmap(NULL, window_size, PROT_NONE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+   if (window == MAP_FAILED)
+      return MAP_FAILED;
+
+   uint8_t *ptr = (uint8_t *)align64((uintptr_t)window, alignment);
+   if (mmap(ptr, size, PROT_READ | PROT_WRITE, MAP_SHARED | MAP_FIXED, fd, 0) ==
+       MAP_FAILED) {
+      munmap(window, window_size);
+      return MAP_FAILED;
+   }
+
+   if (ptr > window)
+      munmap(window, ptr - window);
+   if (ptr + size < window + window_size)
+      munmap(ptr + size, window + window_size - (ptr + size));
+
+   return ptr;
+}
+
+static struct vkr_shm *
+vkr_shm_alloc(uint64_t size, uint64_t alignment)
+{
+   alignment = MAX2(alignment, (uint64_t)getpagesize());
+   const size_t aligned_size = align64(size, alignment);
+
+   struct vkr_shm *shm = calloc(1, sizeof(*shm));
+   if (!shm)
+      return NULL;
+
+   shm->fd = os_create_anonymous_file(aligned_size, "vkr-host-mem");
+   if (shm->fd < 0) {
+      free(shm);
+      return NULL;
+   }
+
+   shm->ptr = vkr_shm_map_aligned(shm->fd, aligned_size, alignment);
+   if (shm->ptr == MAP_FAILED) {
+      close(shm->fd);
+      free(shm);
+      return NULL;
+   }
+
+   shm->size = aligned_size;
+   return shm;
+}
+
+static void
+vkr_shm_free(struct vkr_shm *shm)
+{
+   if (!shm)
+      return;
+
+   munmap(shm->ptr, shm->size);
+   close(shm->fd);
+   free(shm);
+}
+
 static void
 vkr_dispatch_vkAllocateMemory(struct vn_dispatch_context *dispatch,
                               struct vn_command_vkAllocateMemory *args)
@@ -300,9 +372,9 @@ vkr_dispatch_vkAllocateMemory(struct vn_dispatch_context *dispatch,
    uint32_t valid_fd_types = 0;
    int udmabuf_fd = -1;
    void *gbm_bo = NULL;
-   struct vkr_mtl_shm *mtl_shm = NULL;
+   struct vkr_shm *shm = NULL;
    VkExportMemoryAllocateInfo local_export_info;
-   VkImportMemoryMetalHandleInfoEXT local_metal_import;
+   VkImportMemoryHostPointerInfoEXT local_host_import;
 
    if ((property_flags & VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT) && !res_info) {
       /* An implementation can support dma_buf import along with opaque fd export/import.
@@ -352,22 +424,44 @@ vkr_dispatch_vkAllocateMemory(struct vn_dispatch_context *dispatch,
                   align(alloc_info->allocationSize, getpagesize());
             }
          }
-      } else if (physical_dev->EXT_external_memory_metal) {
-         /* Allocate shm and wrap as a MTLBuffer for import. */
-         mtl_shm = vkr_mtl_shm_alloc(dev->mtl_device, alloc_info->allocationSize);
-         if (!mtl_shm) {
+      } else if (physical_dev->use_host_memory_import) {
+         /* Allocate shm and import it as host memory. */
+         shm = vkr_shm_alloc(alloc_info->allocationSize,
+                             physical_dev->min_imported_host_pointer_alignment);
+         if (!shm) {
             args->ret = VK_ERROR_OUT_OF_HOST_MEMORY;
             return;
          }
 
-         local_metal_import = (VkImportMemoryMetalHandleInfoEXT){
-            .sType = VK_STRUCTURE_TYPE_IMPORT_MEMORY_METAL_HANDLE_INFO_EXT,
-            .pNext = alloc_info->pNext,
-            .handleType = VK_EXTERNAL_MEMORY_HANDLE_TYPE_MTLBUFFER_BIT_EXT,
-            .handle = mtl_shm->mtl_buffer,
+         VkMemoryHostPointerPropertiesEXT host_props = {
+            .sType = VK_STRUCTURE_TYPE_MEMORY_HOST_POINTER_PROPERTIES_EXT,
          };
-         alloc_info->pNext = &local_metal_import;
-         alloc_info->allocationSize = mtl_shm->shm_size;
+         args->ret = dev->GetMemoryHostPointerPropertiesEXT(
+            dev->base.handle.device,
+            VK_EXTERNAL_MEMORY_HANDLE_TYPE_HOST_ALLOCATION_BIT_EXT, shm->ptr,
+            &host_props);
+         /* alloc_info->memoryTypeIndex is the driver's index, which the memory
+          * type spoof may have shifted from the one the guest asked for
+          */
+         if (args->ret == VK_SUCCESS &&
+             !(host_props.memoryTypeBits & (1u << alloc_info->memoryTypeIndex))) {
+            vkr_log("host memory import is unsupported for memory type %u",
+                    alloc_info->memoryTypeIndex);
+            args->ret = VK_ERROR_INVALID_EXTERNAL_HANDLE;
+         }
+         if (args->ret != VK_SUCCESS) {
+            vkr_shm_free(shm);
+            return;
+         }
+
+         local_host_import = (VkImportMemoryHostPointerInfoEXT){
+            .sType = VK_STRUCTURE_TYPE_IMPORT_MEMORY_HOST_POINTER_INFO_EXT,
+            .pNext = alloc_info->pNext,
+            .handleType = VK_EXTERNAL_MEMORY_HANDLE_TYPE_HOST_ALLOCATION_BIT_EXT,
+            .pHostPointer = shm->ptr,
+         };
+         alloc_info->pNext = &local_host_import;
+         alloc_info->allocationSize = shm->size;
          valid_fd_types = 1 << VIRGL_RESOURCE_FD_SHM;
       } else if (physical_dev->EXT_external_memory_dma_buf) {
          /* Allocate dma_buf externally and force to import. */
@@ -412,7 +506,7 @@ vkr_dispatch_vkAllocateMemory(struct vn_dispatch_context *dispatch,
          close(local_import_info.fd);
       if (gbm_bo)
          vkr_gbm_bo_destroy(gbm_bo);
-      vkr_mtl_shm_free(mtl_shm);
+      vkr_shm_free(shm);
       return;
    }
 
@@ -422,7 +516,7 @@ vkr_dispatch_vkAllocateMemory(struct vn_dispatch_context *dispatch,
    mem->valid_fd_types = valid_fd_types;
    mem->udmabuf_fd = udmabuf_fd;
    mem->gbm_bo = gbm_bo;
-   mem->mtl_shm = mtl_shm;
+   mem->shm = shm;
    mem->allocation_size = alloc_info->allocationSize;
    mem->memory_type_index = alloc_info->memoryTypeIndex;
 }
@@ -432,12 +526,18 @@ vkr_dispatch_vkFreeMemory(struct vn_dispatch_context *dispatch,
                           struct vn_command_vkFreeMemory *args)
 {
    TRACE_FUNC();
+   struct vkr_context *ctx = dispatch->data;
+   struct vkr_device *dev = vkr_device_from_handle(args->device);
    struct vkr_device_memory *mem = vkr_device_memory_from_handle(args->memory);
    if (!mem)
       return;
 
+   /* The driver may reference the shm pages until the VkDeviceMemory is
+    * freed, so free the driver handle before releasing the backing.
+    */
+   vkr_device_memory_destroy_driver_handle(ctx, args);
    vkr_device_memory_release(mem);
-   vkr_device_memory_destroy_and_remove(dispatch->data, args);
+   vkr_device_remove_object(ctx, dev, &mem->base);
 }
 
 static void
@@ -532,7 +632,7 @@ vkr_context_init_device_memory_dispatch(struct vkr_context *ctx)
 void
 vkr_device_memory_release(struct vkr_device_memory *mem)
 {
-   vkr_mtl_shm_free(mem->mtl_shm);
+   vkr_shm_free(mem->shm);
    if (mem->gbm_bo)
       vkr_gbm_bo_destroy(mem->gbm_bo);
    if (mem->udmabuf_fd >= 0)
@@ -570,11 +670,11 @@ vkr_device_memory_export_blob(struct vkr_device_memory *mem,
                                       : VIRGL_RENDERER_MAP_CACHE_WC;
    }
 
-   if (mem->mtl_shm && mem->mtl_shm->shm_fd >= 0) {
+   if (mem->shm) {
       mem->exported = true;
       *out_blob = (struct virgl_context_blob){
          .type = VIRGL_RESOURCE_FD_SHM,
-         .u.fd = os_dupfd_cloexec(mem->mtl_shm->shm_fd),
+         .u.fd = os_dupfd_cloexec(mem->shm->fd),
          .map_info = map_info,
       };
       return out_blob->u.fd >= 0;

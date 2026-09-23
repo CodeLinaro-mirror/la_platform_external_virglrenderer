@@ -28,8 +28,13 @@ struct vkr_physical_device {
    bool KHR_external_fence_fd;
    bool KHR_external_semaphore_fd;
 
-   bool EXT_external_memory_metal;
-   bool EXT_metal_objects;
+   bool EXT_external_memory_host;
+
+   /* the host cannot export memory as an fd, so memory the guest may map is
+    * POSIX shm imported as host memory
+    */
+   bool use_host_memory_import;
+   VkDeviceSize min_imported_host_pointer_alignment;
 
    VkPhysicalDeviceMemoryProperties memory_properties;
    bool mem_type_spoof;
