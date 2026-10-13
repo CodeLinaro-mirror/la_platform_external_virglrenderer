@@ -353,6 +353,11 @@ vkr_dispatch_vkAllocateMemory(struct vn_dispatch_context *dispatch,
    /* track if driver has requested export allocation */
    const bool might_export = export_info && export_info->handleTypes;
 
+   /* Strip export info when importing from an existing resource, since guest
+    * re-export uses that resource directly rather than exporting this memory.
+    */
+   bool strip_export_info = !!res_info;
+
    /* XXX Force dma_buf/opaque fd export or gbm bo import until a new extension that
     * supports direct export from host visible memory
     *
@@ -369,6 +374,7 @@ vkr_dispatch_vkAllocateMemory(struct vn_dispatch_context *dispatch,
    if (physical_dev->mem_type_spoof && mem_type_index > 0)
       alloc_info->memoryTypeIndex = mem_type_index - 1;
 
+   const bool host_visible = property_flags & VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT;
    uint32_t valid_fd_types = 0;
    int udmabuf_fd = -1;
    void *gbm_bo = NULL;
@@ -376,7 +382,7 @@ vkr_dispatch_vkAllocateMemory(struct vn_dispatch_context *dispatch,
    VkExportMemoryAllocateInfo local_export_info;
    VkImportMemoryHostPointerInfoEXT local_host_import;
 
-   if ((property_flags & VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT) && !res_info) {
+   if ((host_visible || might_export) && !res_info) {
       /* An implementation can support dma_buf import along with opaque fd export/import.
        * If the client driver is using external memory and requesting dma_buf, without
        * dma_buf fd export support, we must use gbm bo import path instead of forcing
@@ -467,17 +473,9 @@ vkr_dispatch_vkAllocateMemory(struct vn_dispatch_context *dispatch,
          alloc_info->pNext = &local_host_import;
          alloc_info->allocationSize = shm->size;
          valid_fd_types = 1 << VIRGL_RESOURCE_FD_SHM;
+         strip_export_info = true;
       } else if (physical_dev->EXT_external_memory_dma_buf) {
          /* Allocate dma_buf externally and force to import. */
-         if (export_info) {
-            /* Strip export info since valid_fd_types can only be dma_buf here. */
-            void *prev_of_export_info = vkr_find_prev_struct(
-               alloc_info, VK_STRUCTURE_TYPE_EXPORT_MEMORY_ALLOCATE_INFO);
-
-            vkr_pnext_set_next(prev_of_export_info, export_info->pNext);
-            export_info = NULL;
-         }
-
          if (force_udmabuf_import) {
             /* To be noted, there are 2 limits for udmabuf:
              * - list_limit: udmabuf_create_list->count limit. Default is 1024.
@@ -494,7 +492,15 @@ vkr_dispatch_vkAllocateMemory(struct vn_dispatch_context *dispatch,
 
          alloc_info->pNext = &local_import_info;
          valid_fd_types = 1 << VIRGL_RESOURCE_FD_DMABUF;
+         strip_export_info = true;
       }
+   }
+
+   if (export_info && strip_export_info) {
+      void *prev_of_export_info =
+         vkr_find_prev_struct(alloc_info, VK_STRUCTURE_TYPE_EXPORT_MEMORY_ALLOCATE_INFO);
+      vkr_pnext_set_next(prev_of_export_info, export_info->pNext);
+      export_info = NULL;
    }
 
    if (export_info) {
