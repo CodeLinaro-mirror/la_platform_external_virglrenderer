@@ -132,20 +132,20 @@ os_create_anonymous_file(off_t size, const char *debug_name)
    const char *tag = (debug_name && debug_name[0]) ? debug_name : "mesa";
    const unsigned int nonce = arc4random();
    for (unsigned int i = 0; i < 32; i++) {
-     char shm_name[64];
-     snprintf(shm_name, sizeof(shm_name), "/%s-%d-%x-%x", tag, getpid(), nonce,
-              i);
-     /* macOS shm_open() rejects O_CLOEXEC with EINVAL; set close-on-exec
-      * explicitly afterwards instead. */
-     fd = shm_open(shm_name, O_CREAT | O_EXCL | O_RDWR, 0600);
-     if (fd >= 0) {
-       fcntl(fd, F_SETFD, FD_CLOEXEC);
-       shm_unlink(shm_name);
-       break;
-     }
+      char shm_name[64];
+      snprintf(shm_name, sizeof(shm_name), "/%s-%d-%x-%x", tag, getpid(), nonce, i);
+      /* macOS shm_open() rejects O_CLOEXEC with EINVAL; set close-on-exec
+       * explicitly afterwards instead.
+       */
+      fd = shm_open(shm_name, O_CREAT | O_EXCL | O_RDWR, 0600);
+      if (fd >= 0) {
+         fcntl(fd, F_SETFD, FD_CLOEXEC);
+         shm_unlink(shm_name);
+         break;
+      }
 
-     if (errno != EEXIST)
-       break;
+      if (errno != EEXIST)
+         break;
    }
 #elif defined(__OpenBSD__)
    char template[] = "/tmp/mesa-XXXXXXXXXX";
