@@ -586,16 +586,38 @@ static void vtest_call_drm_sync_wait(struct vtest_drm_sync_wait *wait)
 }
 
 static void
+vtest_complete_drm_sync_wait(struct vtest_drm_sync_wait *wait)
+{
+   uint32_t resp[2] = { wait->first_signaled, wait->ret };
+   vtest_block_write(wait->pipe_fd, resp, sizeof(resp));
+
+   vtest_free_drm_sync_wait(wait);
+}
+
+static void
 drm_sync_wait_run(void *job)
 {
    struct vtest_drm_sync_wait *wait = job;
 
    vtest_call_drm_sync_wait(wait);
+   vtest_complete_drm_sync_wait(wait);
+}
 
-   uint32_t resp[2] = { wait->first_signaled, wait->ret };
-   vtest_block_write(wait->pipe_fd, resp, sizeof(resp));
+static void
+vtest_dispatch_drm_sync_wait(struct threadpool *pool,
+                            struct vtest_drm_sync_wait *wait)
+{
+   /* Poll first to avoid worker scheduling for already-satisfied waits. */
+   uint64_t timeout = wait->timeout;
+   wait->timeout = 0;
+   vtest_call_drm_sync_wait(wait);
+   wait->timeout = timeout;
 
-   vtest_free_drm_sync_wait(wait);
+   /* We also don't have to schedule a work if timeout is zero */
+   if (wait->ret == -ETIME && wait->timeout != 0)
+      threadpool_run(pool, drm_sync_wait_run, wait);
+   else
+      vtest_complete_drm_sync_wait(wait);
 }
 #endif /* ENABLE_DRM */
 
@@ -2713,7 +2735,7 @@ int vtest_drm_sync_wait(UNUSED uint32_t length_dw)
 
       ret = vtest_send_fd(ctx->out_fd, ret_fd);
 
-      threadpool_run(&ctx->drm_sync_wait_pool, drm_sync_wait_run, wait);
+      vtest_dispatch_drm_sync_wait(&ctx->drm_sync_wait_pool, wait);
 
       close(ret_fd);
 
@@ -2906,7 +2928,7 @@ int vtest_drm_sync_timeline_wait(UNUSED uint32_t length_dw)
 
       ret = vtest_send_fd(ctx->out_fd, ret_fd);
 
-      threadpool_run(&ctx->drm_sync_wait_pool, drm_sync_wait_run, wait);
+      vtest_dispatch_drm_sync_wait(&ctx->drm_sync_wait_pool, wait);
 
       close(ret_fd);
 
