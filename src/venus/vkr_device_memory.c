@@ -309,6 +309,8 @@ struct vkr_blob_mem_info {
 
 static bool
 vkr_fix_import_info(struct vkr_context *ctx,
+                    const struct vkr_physical_device *physical_dev,
+                    VkMemoryAllocateInfo *alloc_info,
                     void *prev_of_res_info,
                     struct vkr_blob_mem_info *local_info)
 {
@@ -322,6 +324,30 @@ vkr_fix_import_info(struct vkr_context *ctx,
 
    if (!res->fd_valid)
       return false;
+
+   if (res->fd_type == VIRGL_RESOURCE_FD_SHM) {
+      if (!physical_dev->EXT_external_memory_host)
+         return false;
+
+      const VkDeviceSize alignment =
+         physical_dev->host_ptr_props.minImportedHostPointerAlignment;
+      struct vkr_shm *shm = vkr_shm_create(res->u.fd, res->size, alignment);
+      if (!shm || alloc_info->allocationSize > shm->size) {
+         vkr_shm_destroy(shm);
+         return false;
+      }
+
+      local_info->shm = shm;
+      local_info->host_ptr = (VkImportMemoryHostPointerInfoEXT){
+         .sType = VK_STRUCTURE_TYPE_IMPORT_MEMORY_HOST_POINTER_INFO_EXT,
+         .pNext = res_info->pNext,
+         .handleType = VK_EXTERNAL_MEMORY_HANDLE_TYPE_HOST_ALLOCATION_BIT_EXT,
+         .pHostPointer = shm->ptr,
+      };
+      vkr_pnext_set_next(prev_of_res_info, &local_info->host_ptr);
+      alloc_info->allocationSize = shm->size;
+      return true;
+   }
 
    VkExternalMemoryHandleTypeFlagBits handle_type;
    switch (res->fd_type) {
@@ -365,7 +391,9 @@ vkr_dispatch_vkAllocateMemory(struct vn_dispatch_context *dispatch,
       return;
    }
 
-   /* translate VkImportMemoryResourceInfoMESA into VkImportMemoryFdInfoKHR in place */
+   /* translate VkImportMemoryResourceInfoMESA into VkImportMemoryFdInfoKHR or
+    * VkImportMemoryHostPointerInfoEXT in place
+    */
    struct vkr_blob_mem_info blob_info = {
       .fd = { .fd = -1 },
       .udmabuf_fd = -1,
@@ -373,7 +401,8 @@ vkr_dispatch_vkAllocateMemory(struct vn_dispatch_context *dispatch,
    void *prev_of_res_info = vkr_find_prev_struct(
       alloc_info, VK_STRUCTURE_TYPE_IMPORT_MEMORY_RESOURCE_INFO_MESA);
    if (prev_of_res_info) {
-      if (!vkr_fix_import_info(ctx, prev_of_res_info, &blob_info)) {
+      if (!vkr_fix_import_info(ctx, physical_dev, alloc_info, prev_of_res_info,
+                               &blob_info)) {
          args->ret = VK_ERROR_INVALID_EXTERNAL_HANDLE;
          return;
       }
@@ -656,6 +685,34 @@ vkr_dispatch_vkGetMemoryResourcePropertiesMESA(
       args->pMemoryResourceProperties->memoryTypeBits = mem_fd_props.memoryTypeBits;
       break;
    }
+   case VIRGL_RESOURCE_FD_SHM: {
+      const struct vkr_physical_device *physical_dev = dev->physical_device;
+      if (!physical_dev->EXT_external_memory_host) {
+         args->ret = VK_ERROR_INVALID_EXTERNAL_HANDLE;
+         return;
+      }
+
+      const VkDeviceSize host_ptr_alignment =
+         physical_dev->host_ptr_props.minImportedHostPointerAlignment;
+      struct vkr_shm *shm = vkr_shm_create(res->u.fd, res->size, host_ptr_alignment);
+      if (!shm) {
+         args->ret = VK_ERROR_INVALID_EXTERNAL_HANDLE;
+         return;
+      }
+
+      VkMemoryHostPointerPropertiesEXT host_props = {
+         .sType = VK_STRUCTURE_TYPE_MEMORY_HOST_POINTER_PROPERTIES_EXT,
+      };
+      args->ret = dev->GetMemoryHostPointerPropertiesEXT(
+         args->device, VK_EXTERNAL_MEMORY_HANDLE_TYPE_HOST_ALLOCATION_BIT_EXT, shm->ptr,
+         &host_props);
+      vkr_shm_destroy(shm);
+      if (args->ret != VK_SUCCESS)
+         return;
+
+      args->pMemoryResourceProperties->memoryTypeBits = host_props.memoryTypeBits;
+      break;
+   }
    default:
       args->ret = VK_ERROR_INVALID_EXTERNAL_HANDLE;
       return;
@@ -732,7 +789,13 @@ vkr_device_memory_export_blob(struct vkr_device_memory *mem,
                                       : VIRGL_RENDERER_MAP_CACHE_WC;
    }
 
-   if (mem->shm) {
+   if (mem->valid_fd_types & (1 << VIRGL_RESOURCE_FD_SHM)) {
+      assert(mem->shm);
+      if (blob_size > mem->shm->size) {
+         vkr_log("mem shm_size %zu < blob_size %" PRIu64, mem->shm->size, blob_size);
+         return false;
+      }
+
       mem->exported = true;
       *out_blob = (struct virgl_context_blob){
          .type = VIRGL_RESOURCE_FD_SHM,

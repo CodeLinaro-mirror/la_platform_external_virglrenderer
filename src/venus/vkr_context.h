@@ -25,8 +25,8 @@ struct vkr_resource {
    enum virgl_resource_fd_type fd_type;
 
    /* This tells whether u.fd or u.data is valid, which cannot be implied by fd_type.
-    * e.g. a shm resource created from a device memory holds an fd (if the memory
-    * might be exported) rather than a mapping.
+    * e.g. a shm resource only holds a mapping for venus internal use, but only holds an
+    * fd for guest side external memory sharing.
     */
    bool fd_valid;
    union {

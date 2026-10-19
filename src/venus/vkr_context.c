@@ -262,6 +262,16 @@ vkr_context_import_resource_from_shm(struct vkr_context *ctx,
 {
    assert(!vkr_context_get_resource(ctx, res_id));
 
+#ifdef __APPLE__
+   /* The shm resource is imported for guest side external memory sharing, and must
+    * only hold the fd.
+    */
+   return vkr_context_import_resource_internal(ctx, res_id, blob_size,
+                                               VIRGL_RESOURCE_FD_SHM, fd, NULL);
+#else
+   /* The shm resource is imported for venus internal use (e.g. guest vram mode), and
+    * must only hold the mapping.
+    */
    void *mmap_ptr = mmap(NULL, blob_size, PROT_WRITE | PROT_READ, MAP_SHARED, fd, 0);
    if (mmap_ptr == MAP_FAILED)
       return false;
@@ -274,6 +284,7 @@ vkr_context_import_resource_from_shm(struct vkr_context *ctx,
 
    close(fd);
    return true;
+#endif /* __APPLE__ */
 }
 
 static bool
