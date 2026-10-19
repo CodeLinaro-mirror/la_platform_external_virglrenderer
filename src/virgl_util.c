@@ -153,10 +153,8 @@ static enum virgl_log_level_flags virgl_log_level = VIRGL_LOG_LEVEL_ERROR;
 #endif
 static bool virgl_log_level_initialized = false;
 
-static
-void virgl_default_logger(UNUSED enum virgl_log_level_flags log_level,
-                          const char *message,
-                          UNUSED void* user_data)
+static FILE *
+virgl_default_log_file(void)
 {
    static FILE* fp = NULL;
    if (NULL == fp) {
@@ -185,6 +183,12 @@ void virgl_default_logger(UNUSED enum virgl_log_level_flags log_level,
       }
    }
 
+   return fp;
+}
+
+static bool
+virgl_default_log_enabled(enum virgl_log_level_flags log_level)
+{
    if (!virgl_log_level_initialized) {
       const char* log_level_env = getenv("VIRGL_LOG_LEVEL");
       if (log_level_env != NULL && log_level_env[0] != '\0') {
@@ -200,15 +204,25 @@ void virgl_default_logger(UNUSED enum virgl_log_level_flags log_level,
          }
 
          if (!lut->name)
-            fprintf(fp, "Unknown log level %s requested\n", log_level_env);
+            fprintf(virgl_default_log_file(), "Unknown log level %s requested\n",
+                    log_level_env);
       }
 
       virgl_log_level_initialized = true;
    }
 
-   if (log_level < virgl_log_level)
+   return log_level >= virgl_log_level;
+}
+
+static
+void virgl_default_logger(enum virgl_log_level_flags log_level,
+                          const char *message,
+                          UNUSED void* user_data)
+{
+   if (!virgl_default_log_enabled(log_level))
       return;
 
+   FILE *fp = virgl_default_log_file();
    fprintf(fp, "%s", message);
    fflush(fp);
 }
@@ -224,6 +238,17 @@ static struct {
    virgl_free_data_callback_type free_data_cb;
    void *user_data;
 } virgl_log_data = { virgl_default_logger, NULL, NULL };
+
+static bool
+virgl_log_level_enabled(enum virgl_log_level_flags log_level)
+{
+   if (!virgl_log_data.log_cb)
+      return false;
+
+   /* Only filter the default logger; custom callbacks receive all levels. */
+   return virgl_log_data.log_cb != virgl_default_logger ||
+          virgl_default_log_enabled(log_level);
+}
 
 void virgl_log_set_handler(virgl_log_callback_type log_cb,
                            void *user_data,
@@ -241,7 +266,7 @@ void virgl_logv(enum virgl_log_level_flags log_level, const char *fmt, va_list v
 {
    char *str = NULL;
 
-   if (!virgl_log_data.log_cb)
+   if (!virgl_log_level_enabled(log_level))
       return;
 
    if (vasprintf(&str, fmt, va) < 0)
@@ -258,6 +283,9 @@ void virgl_prefixed_logv(const char *domain,
 {
    char *prefixed_fmt = NULL;
    char line_end = '\0';
+
+   if (!virgl_log_level_enabled(log_level))
+      return;
 
    assert(strchr(domain,'%') == NULL);
 
