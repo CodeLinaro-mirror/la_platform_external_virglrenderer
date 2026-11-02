@@ -22,7 +22,6 @@
 
 #include "amdgpu_renderer.h"
 
-#include "pipe/p_state.h"
 #include "util/anon_file.h"
 #include "util/bitscan.h"
 #include "util/hash_table.h"
@@ -30,7 +29,6 @@
 #include "util/os_file.h"
 #include "util/u_atomic.h"
 #include "util/u_math.h"
-#include "vrend/vrend_renderer.h"
 #include "amdgpu_virtio_proto.h"
 #include "virgl_context.h"
 #include "virglrenderer.h"
@@ -59,7 +57,7 @@
    if (ctx->debug >= level) { \
       unsigned c = (unsigned)((uintptr_t)ctx >> 8) % 256; \
       printf("\033[0;38;5;%dm", c);     \
-      printf("[%d|%s] %s: " fmt "\n", ctx->base.base.ctx_id, ctx->debug_name, __FUNCTION__, ##__VA_ARGS__); \
+      printf("[%d|%s] %s: " fmt "\n", ctx->base.base.ctx_id, ctx->debug_name, __func__, ##__VA_ARGS__); \
       printf("\033[0m");     \
    } \
  } while (false)
@@ -240,7 +238,7 @@ amdgpu_renderer_attach_resource(struct virgl_context *vctx, struct virgl_resourc
          ret = amdgpu_bo_import(ctx->dev, amdgpu_bo_handle_type_dma_buf_fd, fd,
                                 &import);
 
-         close_fd(ctx, fd, __FUNCTION__);
+         close_fd(ctx, fd, __func__);
          if (ret) {
             print(0, "Could not import fd=%d: %s", fd, strerror(errno));
             return;
@@ -263,7 +261,7 @@ amdgpu_renderer_attach_resource(struct virgl_context *vctx, struct virgl_resourc
       } else {
          print(2, "Ignored res_id: %d (fd_type = %d)", res->res_id, fd_type);
          if (fd_type != VIRGL_RESOURCE_FD_INVALID)
-            close_fd(ctx, fd, __FUNCTION__);
+            close_fd(ctx, fd, __func__);
          return;
       }
    }
@@ -287,7 +285,7 @@ amdgpu_renderer_export_opaque_handle(struct virgl_context *vctx,
 {
    struct drm_context *dctx = to_drm_context(vctx);
    struct amdgpu_context *ctx = to_amdgpu_context(dctx);
-   struct amdgpu_object *obj = amdgpu_get_object_from_res_id(ctx, res->res_id, __FUNCTION__);
+   struct amdgpu_object *obj = amdgpu_get_object_from_res_id(ctx, res->res_id, __func__);
    int ret;
 
    print(2, "obj=%p, res_id=%u", (void *)obj, res->res_id);
@@ -329,7 +327,7 @@ static void * amdgpu_renderer_resource_map(struct virgl_context *vctx,
 {
    struct drm_context *dctx = to_drm_context(vctx);
    struct amdgpu_context *ctx = to_amdgpu_context(dctx);
-   struct amdgpu_object *obj = amdgpu_get_object_from_res_id(ctx, res->res_id, __FUNCTION__);
+   struct amdgpu_object *obj = amdgpu_get_object_from_res_id(ctx, res->res_id, __func__);
    union drm_amdgpu_gem_mmap args = { 0 };
    int r;
 
@@ -474,7 +472,7 @@ amdgpu_ccmd_query_info(struct drm_context *dctx, struct vdrm_ccmd_req *hdr)
    if (__builtin_add_overflow(sizeof(*rsp), req->info.return_size, &rsp_len) ||
        rsp_len > MAX_SIZE || req->info.return_size > MAX_SIZE) {
       print(1, "%s: Request or response size too large: %zu + %u > %u or %" PRIu32 " > %u",
-            __FUNCTION__, sizeof(*rsp), req->info.return_size, MAX_SIZE,
+            __func__, sizeof(*rsp), req->info.return_size, MAX_SIZE,
             req->info.return_size, MAX_SIZE);
       return -EINVAL;
    }
@@ -516,7 +514,7 @@ amdgpu_ccmd_gem_new(struct drm_context *dctx, struct vdrm_ccmd_req *hdr)
 
    if (req->r.__pad) {
       print(0, "Invalid value for struct %s_req::r::__pad: "
-            "0x%x", __FUNCTION__, req->r.__pad);
+            "0x%x", __func__, req->r.__pad);
       ret = -EINVAL;
       goto alloc_failed;
    }
@@ -597,7 +595,7 @@ amdgpu_ccmd_bo_va_op(struct drm_context *dctx, struct vdrm_ccmd_req *hdr)
    if (req->flags2 & AMDGPU_CCMD_BO_VA_OP_SPARSE_BO) {
       obj = NULL;
    } else {
-      obj = amdgpu_get_object_from_res_id(ctx, req->res_id, __FUNCTION__);
+      obj = amdgpu_get_object_from_res_id(ctx, req->res_id, __func__);
       if (!obj) {
          print(0,
             "amdgpu_bo_va_op_raw failed: "
@@ -643,7 +641,7 @@ amdgpu_ccmd_set_metadata(struct drm_context *dctx, struct vdrm_ccmd_req *hdr)
       print(0, "Cannot alloc response buffer");
       return -ENOMEM;
    }
-   struct amdgpu_object *obj = amdgpu_get_object_from_res_id(ctx, req->res_id, __FUNCTION__);
+   struct amdgpu_object *obj = amdgpu_get_object_from_res_id(ctx, req->res_id, __func__);
    if (!obj) {
       print(0, "Cannot find object with res_id=%d",
               req->res_id);
@@ -710,7 +708,7 @@ amdgpu_ccmd_bo_query_info(struct drm_context *dctx, struct vdrm_ccmd_req *hdr)
     * guest passing vrend dumb buffer resource to native context. In this case, native
     * context should error out the offending resource, but continue execution.
     */
-   struct amdgpu_object *obj = amdgpu_get_object_from_res_id(ctx, req->res_id, __FUNCTION__);
+   struct amdgpu_object *obj = amdgpu_get_object_from_res_id(ctx, req->res_id, __func__);
    if (!obj) {
       print(0, "Cannot find object");
       rsp->hdr.ret = -EINVAL;
@@ -842,7 +840,7 @@ amdgpu_ccmd_cs_submit(struct drm_context *dctx, struct vdrm_ccmd_req *hdr)
    /* Do not allocate arbitrarily large buffer. */
    if (req->num_chunks > AMDGPU_CCMD_CS_SUBMIT_MAX_NUM_CHUNKS) {
       print(1, "%s: Invalid num_chunks: %u > %d",
-            __FUNCTION__, req->num_chunks, AMDGPU_CCMD_CS_SUBMIT_MAX_NUM_CHUNKS);
+            __func__, req->num_chunks, AMDGPU_CCMD_CS_SUBMIT_MAX_NUM_CHUNKS);
       rsp->ret = -EINVAL;
       return -1;
    }
@@ -930,7 +928,7 @@ amdgpu_ccmd_cs_submit(struct drm_context *dctx, struct vdrm_ccmd_req *hdr)
 
          for (uint32_t j = 0; j < bo_count; j++) {
             struct amdgpu_object *obj =
-               amdgpu_get_object_from_res_id(ctx, bo_handles_in[j].bo_handle, __FUNCTION__);
+               amdgpu_get_object_from_res_id(ctx, bo_handles_in[j].bo_handle, __func__);
             if (!obj) {
                print(0, "Couldn't retrieve bo with res_id %d", bo_handles_in[j].bo_handle);
                r = -EINVAL;
@@ -955,7 +953,7 @@ amdgpu_ccmd_cs_submit(struct drm_context *dctx, struct vdrm_ccmd_req *hdr)
             goto end;
          }
          struct amdgpu_object *obj =
-               amdgpu_get_object_from_res_id(ctx, in->handle, __FUNCTION__);
+               amdgpu_get_object_from_res_id(ctx, in->handle, __func__);
          if (!obj) {
             print(0, "Couldn't retrieve user_fence bo with res_id %d", in->handle);
             r = -EINVAL;
