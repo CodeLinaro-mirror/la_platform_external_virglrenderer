@@ -13144,6 +13144,11 @@ void *vrend_renderer_get_cursor_contents(struct pipe_resource *pres,
    if (glGetError() != GL_NO_ERROR)
       goto out;
 
+   /* On GLES, BGRA resources are stored and read back as RGBA, so restore
+    * the byte ordering the guest expects. */
+   if (vrend_state.use_gles && vrend_format_is_bgra(res->base.format))
+      vrend_swizzle_data_bgra(size, data);
+
    if (!res->y_0_top) {
       *width = res->base.width0;
       *height = res->base.height0;
