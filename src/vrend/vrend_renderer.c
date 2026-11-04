@@ -9707,8 +9707,11 @@ static bool do_readpixels(struct vrend_resource *res,
                           GLsizei bufSize, void *data)
 {
    GLuint fb_id;
+   GLint old_draw_fbo, old_read_fbo;
    GLenum err;
 
+   glGetIntegerv(GL_DRAW_FRAMEBUFFER_BINDING, &old_draw_fbo);
+   glGetIntegerv(GL_READ_FRAMEBUFFER_BINDING, &old_read_fbo);
    glGenFramebuffers(1, &fb_id);
    glBindFramebuffer(GL_FRAMEBUFFER, fb_id);
 
@@ -9758,6 +9761,8 @@ static bool do_readpixels(struct vrend_resource *res,
 
    err = glGetError();
    glDeleteFramebuffers(1, &fb_id);
+   glBindFramebuffer(GL_DRAW_FRAMEBUFFER, old_draw_fbo);
+   glBindFramebuffer(GL_READ_FRAMEBUFFER, old_read_fbo);
 
    if (err != GL_NO_ERROR) {
       virgl_error("glReadPixels failed: GL error %d\n", err);
@@ -9783,7 +9788,7 @@ static int vrend_transfer_send_readpixels(struct vrend_context *ctx,
    int elsize = util_format_get_blocksize(res->base.format);
    float depth_scale;
    int row_stride = info->stride / elsize;
-   GLint old_fbo;
+   GLint old_draw_fbo, old_read_fbo;
 
    vrend_use_program(NULL);
 
@@ -9852,7 +9857,8 @@ static int vrend_transfer_send_readpixels(struct vrend_context *ctx,
          row_stride = util_format_get_nblocksx(res->base.format, u_minify(res->base.width0, info->level));
    }
 
-   glGetIntegerv(GL_DRAW_FRAMEBUFFER_BINDING, &old_fbo);
+   glGetIntegerv(GL_DRAW_FRAMEBUFFER_BINDING, &old_draw_fbo);
+   glGetIntegerv(GL_READ_FRAMEBUFFER_BINDING, &old_read_fbo);
 
    if (actually_invert)
       y1 = h - info->box->y - info->box->height;
@@ -9907,7 +9913,8 @@ static int vrend_transfer_send_readpixels(struct vrend_context *ctx,
    if (!read_pixels) {
       if (need_temp)
          free(data);
-      glBindFramebuffer(GL_FRAMEBUFFER, old_fbo);
+      glBindFramebuffer(GL_DRAW_FRAMEBUFFER, old_draw_fbo);
+      glBindFramebuffer(GL_READ_FRAMEBUFFER, old_read_fbo);
       return EINVAL;
    }
 
@@ -9936,7 +9943,8 @@ static int vrend_transfer_send_readpixels(struct vrend_context *ctx,
       free(data);
    }
 
-   glBindFramebuffer(GL_FRAMEBUFFER, old_fbo);
+   glBindFramebuffer(GL_DRAW_FRAMEBUFFER, old_draw_fbo);
+   glBindFramebuffer(GL_READ_FRAMEBUFFER, old_read_fbo);
 
    return 0;
 }
