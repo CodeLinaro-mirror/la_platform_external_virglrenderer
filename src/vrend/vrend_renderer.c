@@ -12979,66 +12979,204 @@ GLint64 vrend_renderer_get_timestamp(void)
    return v;
 }
 
+static int vrend_gl_read_pixel_size(GLenum format, GLenum type)
+{
+   int components;
+
+   switch (format) {
+   case GL_ALPHA:
+   case GL_ALPHA_INTEGER:
+   case GL_DEPTH_COMPONENT:
+   case GL_LUMINANCE:
+   case GL_LUMINANCE_INTEGER_EXT:
+   case GL_RED:
+   case GL_RED_INTEGER:
+   case GL_STENCIL_INDEX:
+      components = 1;
+      break;
+   case GL_DEPTH_STENCIL:
+   case GL_LUMINANCE_ALPHA:
+   case GL_LUMINANCE_ALPHA_INTEGER_EXT:
+   case GL_RG:
+   case GL_RG_INTEGER:
+      components = 2;
+      break;
+   case GL_BGR:
+   case GL_BGR_INTEGER:
+   case GL_RGB:
+   case GL_RGB_INTEGER:
+      components = 3;
+      break;
+   case GL_ABGR_EXT:
+   case GL_BGRA:
+   case GL_BGRA_INTEGER:
+   case GL_RGBA:
+   case GL_RGBA_INTEGER:
+      components = 4;
+      break;
+   default:
+      return 0;
+   }
+
+   switch (type) {
+   case GL_BYTE:
+   case GL_UNSIGNED_BYTE:
+      return components;
+   case GL_HALF_FLOAT:
+   case GL_SHORT:
+   case GL_UNSIGNED_SHORT:
+      return components * 2;
+   case GL_FLOAT:
+   case GL_INT:
+   case GL_UNSIGNED_INT:
+      return components * 4;
+   /* Packed types are not a component count times a type size. */
+   case GL_UNSIGNED_BYTE_3_3_2:
+      return 1;
+   case GL_UNSIGNED_SHORT_4_4_4_4:
+   case GL_UNSIGNED_SHORT_4_4_4_4_REV:
+   case GL_UNSIGNED_SHORT_5_5_5_1:
+   case GL_UNSIGNED_SHORT_5_6_5:
+   case GL_UNSIGNED_SHORT_1_5_5_5_REV:
+      return 2;
+   case GL_UNSIGNED_INT_2_10_10_10_REV:
+   case GL_UNSIGNED_INT_8_8_8_8:
+   case GL_UNSIGNED_INT_8_8_8_8_REV:
+   case GL_UNSIGNED_INT_10F_11F_11F_REV:
+   case GL_UNSIGNED_INT_5_9_9_9_REV:
+   case GL_UNSIGNED_INT_24_8:
+      return 4;
+   case GL_FLOAT_32_UNSIGNED_INT_24_8_REV:
+      return 8;
+   default:
+      return 0;
+   }
+}
+
 void *vrend_renderer_get_cursor_contents(struct pipe_resource *pres,
                                          uint32_t *width,
                                          uint32_t *height)
 {
    struct vrend_resource *res = (struct vrend_resource *)pres;
-   GLenum format, type;
+   GLenum format, type, err;
    int blsize;
    char *data, *data2;
-   int size;
+   size_t size, row_size;
    unsigned h;
+   GLint old_row_length = 0, old_pack_alignment = 4;
+#if UTIL_ARCH_BIG_ENDIAN
+   GLint old_pack_swap_bytes = 0;
+#endif
+   void *ret = NULL;
 
-   if (res->base.width0 > 128 || res->base.height0 > 128)
+   if (!width || !height)
+      return NULL;
+
+   if (res->base.width0 == 0 || res->base.height0 == 0 ||
+       res->base.width0 > 128 || res->base.height0 > 128)
       return NULL;
 
    if (res->target != GL_TEXTURE_2D)
       return NULL;
 
-   if (!width || !height)
+   /* Cursors are read back as a plain image. Compressed or otherwise
+    * unreadable formats would make the GL read fail and return
+    * uninitialized memory to the guest. Depth/stencil formats are
+    * rejected because their GL read format can have a different pixel
+    * size than the util block size (e.g. X24S8_UINT reads as 1 byte per
+    * pixel, not 4). */
+   if (util_format_is_depth_or_stencil(res->base.format) ||
+       util_format_is_compressed(res->base.format) ||
+       !vrend_format_can_readback(res->base.format))
       return NULL;
-
-   *width = res->base.width0;
-   *height = res->base.height0;
 
    format = tex_conv_table[res->base.format].glformat;
    type = tex_conv_table[res->base.format].gltype;
-   blsize = util_format_get_blocksize(res->base.format);
-   size = util_format_get_nblocks(res->base.format, res->base.width0, res->base.height0) * blsize;
-   data = malloc(size);
-   data2 = malloc(size);
-
-   if (!data || !data2) {
-      free(data);
-      free(data2);
+   if (!format || !type)
       return NULL;
-   }
+
+   blsize = util_format_get_blocksize(res->base.format);
+   if (blsize <= 0)
+      return NULL;
+
+   /* The non-robust glGetTexImage() path has no bounds check, so make sure
+    * the GL read format produces exactly the expected number of bytes. */
+   if (vrend_gl_read_pixel_size(format, type) != blsize)
+      return NULL;
+
+   row_size = (size_t)res->base.width0 * blsize;
+   size = row_size * res->base.height0;
+
+   /* Zero the buffer so a driver writing less than size cannot expose
+    * uninitialized heap to the guest. */
+   data = calloc(1, size);
+   if (!data)
+      return NULL;
+
+   /* Read back with GL_PACK_ALIGNMENT 1 so that each row occupies exactly
+    * row_size bytes, matching the allocation above. */
+   while ((err = glGetError()) != GL_NO_ERROR)
+      virgl_warn("%s: Entering with stale GL error: %d\n", __func__, err);
+   glGetIntegerv(GL_PACK_ROW_LENGTH, &old_row_length);
+   glGetIntegerv(GL_PACK_ALIGNMENT, &old_pack_alignment);
+#if UTIL_ARCH_BIG_ENDIAN
+   glGetIntegerv(GL_PACK_SWAP_BYTES, &old_pack_swap_bytes);
+#endif
+   glPixelStorei(GL_PACK_ROW_LENGTH, 0);
+   glPixelStorei(GL_PACK_ALIGNMENT, 1);
+#if UTIL_ARCH_BIG_ENDIAN
+   glPixelStorei(GL_PACK_SWAP_BYTES, 1);
+#endif
 
    if (has_feature(feat_arb_robustness)) {
       glBindTexture(res->target, res->gl_id);
       glGetnTexImageARB(res->target, 0, format, type, size, data);
    } else if (vrend_state.use_gles) {
-      if (!do_readpixels(res, 0, 0, 0, 0, 0, *width, *height, format, type, size, data)) {
-         free(data);
-         free(data2);
-         return NULL;
-      }
+      if (!do_readpixels(res, 0, 0, 0, 0, 0,
+                         res->base.width0, res->base.height0,
+                         format, type, size, data))
+         goto out;
    } else {
       glBindTexture(res->target, res->gl_id);
       glGetTexImage(res->target, 0, format, type, data);
    }
 
-   for (h = 0; h < res->base.height0; h++) {
-      uint32_t dh = res->y_0_top ? (res->base.height0 - h - 1) : (h);
-      uint32_t doff = dh * res->base.width0 * blsize;
-      uint32_t soff = h * res->base.width0 * blsize;
+   if (glGetError() != GL_NO_ERROR)
+      goto out;
 
-      memcpy(data2 + doff, data + soff, res->base.width0 * blsize);
+   if (!res->y_0_top) {
+      *width = res->base.width0;
+      *height = res->base.height0;
+      ret = data;
+      data = NULL;
+      goto out;
+   }
+
+   data2 = malloc(size);
+   if (!data2)
+      goto out;
+
+   for (h = 0; h < res->base.height0; h++) {
+      size_t doff = (size_t)(res->base.height0 - h - 1) * row_size;
+      size_t soff = (size_t)h * row_size;
+
+      memcpy(data2 + doff, data + soff, row_size);
    }
    free(data);
+   data = NULL;
+   *width = res->base.width0;
+   *height = res->base.height0;
+   ret = data2;
+
+out:
    glBindTexture(res->target, 0);
-   return data2;
+   glPixelStorei(GL_PACK_ROW_LENGTH, old_row_length);
+   glPixelStorei(GL_PACK_ALIGNMENT, old_pack_alignment);
+#if UTIL_ARCH_BIG_ENDIAN
+   glPixelStorei(GL_PACK_SWAP_BYTES, old_pack_swap_bytes);
+#endif
+   free(data);
+   return ret;
 }
 
 
