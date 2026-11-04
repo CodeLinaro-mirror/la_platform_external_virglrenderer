@@ -78,6 +78,11 @@ int testvirgl_create_backed_simple_1d_res(struct virgl_resource *res,
                                           int handle);
 int testvirgl_create_backed_simple_2d_res(struct virgl_resource *res,
                                           int handle, int w, int h);
+int testvirgl_create_backed_2d_res(struct virgl_resource *res,
+                                   int handle,
+                                   enum pipe_texture_target target,
+                                   enum pipe_format format,
+                                   int w, int h, int bind, int flags);
 int testvirgl_create_backed_simple_buffer(struct virgl_resource *res,
                                           int handle, int size, int bind);
 void testvirgl_destroy_backed_res(struct virgl_resource *res);
