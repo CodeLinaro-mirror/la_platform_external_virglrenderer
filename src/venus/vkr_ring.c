@@ -6,7 +6,11 @@
 #include "vkr_ring.h"
 
 #include <stdio.h>
+#ifdef __APPLE__
+#include <pthread/qos.h>
+#else
 #include <sys/resource.h>
+#endif
 #include <time.h>
 
 #include "vn_protocol_renderer_dispatches.h"
@@ -254,13 +258,26 @@ vkr_ring_thread(void *arg)
 
    snprintf(thread_name, ARRAY_SIZE(thread_name), "vkr-ring-%d", ctx->ctx_id);
    u_thread_setname(thread_name);
-   if (ring->prio_valid && setpriority(PRIO_PROCESS, 0, ring->prio)) {
-#ifdef DEBUG
-      /* Currently venus doesn't forward the CAP_SYS_NICE request upon forking, so
-       * requesting a high priority outside of the normal range would be at the best
-       * effort. Thus only enable logging on debug build.
+   if (ring->prio_valid) {
+#ifdef __APPLE__
+      /* On macOS setpriority(PRIO_PROCESS, 0, prio) renices the whole process, not
+       * the calling thread, and an unprivileged process can never lower its nice
+       * value again. Lower only this thread's QoS class for a positive guest nice
+       * value instead; a negative one stays at the default class like a request for
+       * a high priority without CAP_SYS_NICE on Linux.
        */
-      vkr_log("failed to set ring thread priority to %d (%d)", ring->prio, errno);
+      if (ring->prio > 0)
+         pthread_set_qos_class_self_np(QOS_CLASS_UTILITY, 0);
+#else
+      if (setpriority(PRIO_PROCESS, 0, ring->prio)) {
+#ifdef DEBUG
+         /* Currently venus doesn't forward the CAP_SYS_NICE request upon forking, so
+          * requesting a high priority outside of the normal range would be at the best
+          * effort. Thus only enable logging on debug build.
+          */
+         vkr_log("failed to set ring thread priority to %d (%d)", ring->prio, errno);
+#endif
+      }
 #endif
    }
 
