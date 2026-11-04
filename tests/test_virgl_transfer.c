@@ -607,7 +607,8 @@ static void get_resource_args(enum pipe_texture_target target, bool invalid,
     box->depth = 1;
     if (args->depth > 1)
       box->depth = 6;
-    if (args->array_size > 1)
+    /* A plain cube transfer addresses one face, selected by box.z. */
+    if (args->array_size > 1 && target != PIPE_TEXTURE_CUBE)
       box->depth = 4;
   }
 }
