@@ -276,7 +276,7 @@ i915_ccmd_gem_create_ext(struct drm_context *dctx, struct vdrm_ccmd_req *hdr)
          if (ext_size < 0)
             break;
 
-         struct drm_i915_gem_memory_class_instance *classes = (void*)mem_regions->regions;
+         struct drm_i915_gem_memory_class_instance *classes = (void *)(uintptr_t)mem_regions->regions;
 
          for (unsigned i = 0; i < mem_regions->num_regions; i++) {
             struct drm_i915_gem_memory_class_instance *class = classes + i;
