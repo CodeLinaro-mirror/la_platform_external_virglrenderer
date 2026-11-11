@@ -24,15 +24,26 @@ struct vkr_resource {
 
    enum virgl_resource_fd_type fd_type;
 
+   /* This tells whether u.fd or u.data is valid, which cannot be implied by fd_type.
+    * e.g. a shm resource created from a device memory holds an fd (if the memory
+    * might be exported) rather than a mapping.
+    */
+   bool fd_valid;
    union {
-      /* valid when fd_type is dma_buf or opaque */
+      /* valid when fd_valid is true */
       int fd;
-      /* valid when fd_type is shm */
+      /* valid when fd_valid is false, and is NULL if not mapped */
       uint8_t *data;
    } u;
 
    size_t size;
 };
+
+static inline bool
+vkr_resource_is_mapped(const struct vkr_resource *res)
+{
+   return !res->fd_valid && res->u.data;
+}
 
 enum vkr_context_validate_level {
    /* no validation */

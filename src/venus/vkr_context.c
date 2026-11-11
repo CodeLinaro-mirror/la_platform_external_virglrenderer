@@ -189,10 +189,10 @@ static inline void
 vkr_context_free_resource(struct hash_entry *entry)
 {
    struct vkr_resource *res = entry->data;
-   if (res->fd_type == VIRGL_RESOURCE_FD_SHM)
-      munmap(res->u.data, res->size);
-   else if (res->u.fd >= 0)
+   if (res->fd_valid)
       close(res->u.fd);
+   else if (res->u.data)
+      munmap(res->u.data, res->size);
    free(res);
 }
 
@@ -240,10 +240,11 @@ vkr_context_import_resource_internal(struct vkr_context *ctx,
 
    /* fd and mmap_ptr cannot be valid at the same time, but allowed to be -1 and NULL */
    assert(fd < 0 || !mmap_ptr);
-   if (mmap_ptr)
-      res->u.data = mmap_ptr;
-   else
+   res->fd_valid = fd >= 0;
+   if (res->fd_valid)
       res->u.fd = fd;
+   else
+      res->u.data = mmap_ptr;
 
    if (!vkr_context_add_resource(ctx, res)) {
       free(res);

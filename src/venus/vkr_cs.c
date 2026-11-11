@@ -80,7 +80,7 @@ vkr_cs_decoder_set_resource_stream(struct vkr_cs_decoder *dec,
 {
    mtx_lock(&dec->resource_mutex);
    struct vkr_resource *res = vkr_context_get_resource(ctx, res_id);
-   if (unlikely(!res || res->fd_type != VIRGL_RESOURCE_FD_SHM || size > res->size ||
+   if (unlikely(!res || !vkr_resource_is_mapped(res) || size > res->size ||
                 offset > res->size - size)) {
       mtx_unlock(&dec->resource_mutex);
       return false;

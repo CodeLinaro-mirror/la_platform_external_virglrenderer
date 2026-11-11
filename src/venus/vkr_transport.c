@@ -18,7 +18,7 @@ vkr_dispatch_vkSetReplyCommandStreamMESA(
 {
    struct vkr_context *ctx = dispatch->data;
    struct vkr_resource *res = vkr_context_get_resource(ctx, args->pStream->resourceId);
-   if (!res || res->fd_type != VIRGL_RESOURCE_FD_SHM) {
+   if (!res || !vkr_resource_is_mapped(res)) {
       vkr_log("failed to set reply stream: invalid res_id %u", args->pStream->resourceId);
       vkr_context_set_fatal(ctx);
       return;
@@ -198,7 +198,7 @@ vkr_dispatch_vkCreateRingMESA(struct vn_dispatch_context *dispatch,
    }
 
    const struct vkr_resource *res = vkr_context_get_resource(ctx, info->resourceId);
-   if (!res || res->fd_type != VIRGL_RESOURCE_FD_SHM) {
+   if (!res || !vkr_resource_is_mapped(res)) {
       vkr_context_set_fatal(ctx);
       return;
    }

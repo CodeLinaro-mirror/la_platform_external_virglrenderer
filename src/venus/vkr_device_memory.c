@@ -39,6 +39,9 @@ vkr_get_fd_info_from_resource_info(struct vkr_context *ctx,
       return false;
    }
 
+   if (!res->fd_valid)
+      return false;
+
    int fd = os_dupfd_cloexec(res->u.fd);
    if (fd < 0)
       return false;
@@ -245,6 +248,13 @@ vkr_gbm_get_fd_info_from_allocation_info(UNUSED struct vkr_physical_device *phys
 }
 
 #endif /* ENABLE_GBM_ALLOCATION */
+
+/* POSIX shm imported as host memory, backing memory the guest can map */
+struct vkr_shm {
+   int fd;
+   void *ptr;
+   size_t size;
+};
 
 /* Map the whole of fd at an address aligned to alignment, which may exceed
  * what mmap guarantees: reserve a window large enough to hold an aligned
@@ -592,6 +602,11 @@ vkr_dispatch_vkGetMemoryResourcePropertiesMESA(
    }
 
    if (res->fd_type != VIRGL_RESOURCE_FD_DMABUF) {
+      args->ret = VK_ERROR_INVALID_EXTERNAL_HANDLE;
+      return;
+   }
+
+   if (!res->fd_valid) {
       args->ret = VK_ERROR_INVALID_EXTERNAL_HANDLE;
       return;
    }
