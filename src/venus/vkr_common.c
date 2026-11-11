@@ -230,6 +230,7 @@ static const struct debug_named_value vkr_debug_options[] = {
    { "udmabuf", VKR_DEBUG_UDMABUF, "Force udmabuf for host visible memory" },
    { "gbm", VKR_DEBUG_GBM, "Force gbm for host visible memory" },
    { "no_mem_type_spoof", VKR_DEBUG_NO_MEM_TYPE_SPOOF, "Disable memory type spoofing" },
+   { "host_ptr", VKR_DEBUG_HOST_PTR, "Check memory types of host pointer import" },
    DEBUG_NAMED_VALUE_END
 };
 

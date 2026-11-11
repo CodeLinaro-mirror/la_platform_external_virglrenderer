@@ -119,6 +119,7 @@ enum vkr_debug_flags {
    VKR_DEBUG_UDMABUF = 1 << 1,
    VKR_DEBUG_GBM = 1 << 2,
    VKR_DEBUG_NO_MEM_TYPE_SPOOF = 1 << 3,
+   VKR_DEBUG_HOST_PTR = 1 << 4,
 };
 
 /* base class for all objects */
