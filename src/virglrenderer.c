@@ -83,18 +83,38 @@ static struct global_state state;
 
 /* new API - just wrap internal API for now */
 
+static int
+noop_resource_create(const struct virgl_renderer_resource_create_args *args,
+                     struct iovec *iov,
+                     uint32_t num_iovs,
+                     const void *image)
+{
+   if (image || args->handle == 0)
+      return EINVAL;
+
+   if (virgl_resource_lookup(args->handle))
+      return -EINVAL;
+
+   struct virgl_resource *res =
+      virgl_resource_create_from_iov(args->handle, iov, num_iovs);
+   if (!res)
+      return -ENOMEM;
+
+   return 0;
+}
+
 static int virgl_renderer_resource_create_internal(struct virgl_renderer_resource_create_args *args,
-                                                   UNUSED struct iovec *iov, UNUSED uint32_t num_iovs,
+                                                   struct iovec *iov, uint32_t num_iovs,
                                                    void *image)
 {
+   if (!state.vrend_initialized)
+      return noop_resource_create(args, iov, num_iovs, image);
+
 #ifdef ENABLE_VREND
    struct virgl_resource *res;
    struct pipe_resource *pipe_res;
    struct vrend_renderer_resource_create_args vrend_args =  { 0 };
    uint32_t map_info;
-
-   if (!state.vrend_initialized && !state.drm_initialized)
-      return EINVAL;
 
    /* do not accept handle 0 */
    if (args->handle == 0)
@@ -127,10 +147,6 @@ static int virgl_renderer_resource_create_internal(struct virgl_renderer_resourc
 
    return 0;
 #else
-   (void)args;
-   (void)iov;
-   (void)num_iovs;
-   (void)image;
    return -EINVAL;
 #endif
 }
@@ -302,8 +318,64 @@ int virgl_renderer_context_create_with_flags(uint32_t ctx_id,
    return 0;
 }
 
+static void
+noop_context_destroy(struct virgl_context *ctx)
+{
+   free(ctx);
+}
+
+static void
+noop_context_attach_resource(UNUSED struct virgl_context *ctx,
+                             UNUSED struct virgl_resource *res)
+{
+}
+
+static void
+noop_context_detach_resource(UNUSED struct virgl_context *ctx,
+                             UNUSED struct virgl_resource *res)
+{
+}
+
+static void
+noop_context_retire_fences(UNUSED struct virgl_context *ctx)
+{
+}
+
+static int
+noop_context_create(uint32_t ctx_id)
+{
+   if (ctx_id == 0)
+      return EINVAL;
+
+   struct virgl_context *ctx = virgl_context_lookup(ctx_id);
+   if (ctx)
+      return ctx->capset_id == 0 ? 0 : EINVAL;
+
+   ctx = calloc(1, sizeof(*ctx));
+   if (!ctx)
+      return ENOMEM;
+
+   ctx->ctx_id = ctx_id;
+   ctx->in_fence_fd = -1;
+   ctx->destroy = noop_context_destroy;
+   ctx->attach_resource = noop_context_attach_resource;
+   ctx->detach_resource = noop_context_detach_resource;
+   ctx->retire_fences = noop_context_retire_fences;
+
+   int ret = virgl_context_add(ctx);
+   if (ret) {
+      free(ctx);
+      return ret;
+   }
+
+   return 0;
+}
+
 int virgl_renderer_context_create(uint32_t handle, uint32_t nlen, const char *name)
 {
+   if (!state.vrend_initialized)
+      return noop_context_create(handle);
+
    return virgl_renderer_context_create_with_flags(handle,
                                                    VIRTGPU_DRM_CAPSET_VIRGL2,
                                                    nlen,
@@ -369,6 +441,10 @@ int virgl_renderer_transfer_write_iov(uint32_t handle,
       return ctx->transfer_3d(ctx, res, &transfer_info,
                               VIRGL_TRANSFER_TO_HOST);
    } else {
+      /* no-op for ctx0 without vrend */
+      if (!state.vrend_initialized)
+         return 0;
+
 #ifdef ENABLE_VREND
       if (!res->pipe_resource)
          return EINVAL;
@@ -412,6 +488,10 @@ int virgl_renderer_transfer_read_iov(uint32_t handle, uint32_t ctx_id,
       return ctx->transfer_3d(ctx, res, &transfer_info,
                               VIRGL_TRANSFER_FROM_HOST);
    } else {
+      /* no-op for ctx0 without vrend */
+      if (!state.vrend_initialized)
+         return 0;
+
 #ifdef ENABLE_VREND
       if (!res->pipe_resource)
          return EINVAL;
