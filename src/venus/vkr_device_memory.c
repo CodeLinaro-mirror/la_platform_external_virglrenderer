@@ -601,31 +601,34 @@ vkr_dispatch_vkGetMemoryResourcePropertiesMESA(
       return;
    }
 
-   if (res->fd_type != VIRGL_RESOURCE_FD_DMABUF) {
-      args->ret = VK_ERROR_INVALID_EXTERNAL_HANDLE;
-      return;
-   }
-
    if (!res->fd_valid) {
       args->ret = VK_ERROR_INVALID_EXTERNAL_HANDLE;
       return;
    }
 
-   static const VkExternalMemoryHandleTypeFlagBits handle_type =
-      VK_EXTERNAL_MEMORY_HANDLE_TYPE_DMA_BUF_BIT_EXT;
-   VkMemoryFdPropertiesKHR mem_fd_props = {
-      .sType = VK_STRUCTURE_TYPE_MEMORY_FD_PROPERTIES_KHR,
-      .pNext = NULL,
-      .memoryTypeBits = 0,
-   };
    vn_replace_vkGetMemoryResourcePropertiesMESA_args_handle(args);
-   args->ret =
-      vk->GetMemoryFdPropertiesKHR(args->device, handle_type, res->u.fd, &mem_fd_props);
-   if (args->ret != VK_SUCCESS)
-      return;
 
-   vkr_physical_device_mem_type_spoof(dev->physical_device, &mem_fd_props.memoryTypeBits);
-   args->pMemoryResourceProperties->memoryTypeBits = mem_fd_props.memoryTypeBits;
+   switch (res->fd_type) {
+   case VIRGL_RESOURCE_FD_DMABUF: {
+      VkMemoryFdPropertiesKHR mem_fd_props = {
+         .sType = VK_STRUCTURE_TYPE_MEMORY_FD_PROPERTIES_KHR,
+      };
+      args->ret = vk->GetMemoryFdPropertiesKHR(
+         args->device, VK_EXTERNAL_MEMORY_HANDLE_TYPE_DMA_BUF_BIT_EXT, res->u.fd,
+         &mem_fd_props);
+      if (args->ret != VK_SUCCESS)
+         return;
+
+      args->pMemoryResourceProperties->memoryTypeBits = mem_fd_props.memoryTypeBits;
+      break;
+   }
+   default:
+      args->ret = VK_ERROR_INVALID_EXTERNAL_HANDLE;
+      return;
+   }
+
+   vkr_physical_device_mem_type_spoof(dev->physical_device,
+                                      &args->pMemoryResourceProperties->memoryTypeBits);
 
    VkMemoryResourceAllocationSizePropertiesMESA *alloc_size_props =
       vkr_find_struct(args->pMemoryResourceProperties->pNext,
