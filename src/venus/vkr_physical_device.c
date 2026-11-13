@@ -152,26 +152,30 @@ vkr_instance_lookup_physical_device(struct vkr_instance *instance,
 }
 
 static void
-vkr_physical_device_init_id_properties(struct vkr_physical_device *physical_dev)
+vkr_physical_device_init_extra_properties(struct vkr_physical_device *physical_dev)
 {
    struct vn_physical_device_proc_table *vk = &physical_dev->proc_table;
 
    VkPhysicalDevice handle = physical_dev->base.handle.physical_device;
-   physical_dev->id_properties.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_ID_PROPERTIES;
-   VkPhysicalDeviceExternalMemoryHostPropertiesEXT host_props = {
-      .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_EXTERNAL_MEMORY_HOST_PROPERTIES_EXT,
-      .pNext = &physical_dev->id_properties,
-   };
    VkPhysicalDeviceProperties2 props2 = {
       .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROPERTIES_2,
-      .pNext = physical_dev->use_host_memory_import
-                  ? (void *)&host_props
-                  : (void *)&physical_dev->id_properties,
    };
-   vk->GetPhysicalDeviceProperties2(handle, &props2);
 
-   physical_dev->min_imported_host_pointer_alignment =
-      host_props.minImportedHostPointerAlignment;
+   physical_dev->id_properties = (VkPhysicalDeviceIDProperties){
+      .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_ID_PROPERTIES,
+      .pNext = props2.pNext,
+   };
+   props2.pNext = &physical_dev->id_properties;
+
+   if (physical_dev->EXT_external_memory_host) {
+      physical_dev->host_ptr_props = (VkPhysicalDeviceExternalMemoryHostPropertiesEXT){
+         .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_EXTERNAL_MEMORY_HOST_PROPERTIES_EXT,
+         .pNext = props2.pNext,
+      };
+      props2.pNext = &physical_dev->host_ptr_props;
+   }
+
+   vk->GetPhysicalDeviceProperties2(handle, &props2);
 }
 
 static void
@@ -490,7 +494,7 @@ vkr_dispatch_vkEnumeratePhysicalDevices(struct vn_dispatch_context *dispatch,
          MIN2(physical_dev->properties.apiVersion, instance->api_version);
       vkr_physical_device_init_extensions(physical_dev);
       vkr_physical_device_init_memory_properties(physical_dev);
-      vkr_physical_device_init_id_properties(physical_dev);
+      vkr_physical_device_init_extra_properties(physical_dev);
       vkr_physical_device_init_queue_family_properties(physical_dev);
 
       list_inithead(&physical_dev->devices);

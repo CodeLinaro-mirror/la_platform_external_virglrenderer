@@ -426,8 +426,9 @@ vkr_dispatch_vkAllocateMemory(struct vn_dispatch_context *dispatch,
          }
       } else if (physical_dev->use_host_memory_import) {
          /* Allocate shm and import it as host memory. */
-         shm = vkr_shm_alloc(alloc_info->allocationSize,
-                             physical_dev->min_imported_host_pointer_alignment);
+         const VkDeviceSize alignment =
+            physical_dev->host_ptr_props.minImportedHostPointerAlignment;
+         shm = vkr_shm_alloc(alloc_info->allocationSize, alignment);
          if (!shm) {
             args->ret = VK_ERROR_OUT_OF_HOST_MEMORY;
             return;
