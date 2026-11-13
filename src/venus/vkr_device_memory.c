@@ -16,46 +16,6 @@
 #include "vkr_device_memory_gen.h"
 #include "vkr_physical_device.h"
 
-static bool
-vkr_get_fd_info_from_resource_info(struct vkr_context *ctx,
-                                   const VkImportMemoryResourceInfoMESA *res_info,
-                                   VkImportMemoryFdInfoKHR *out)
-{
-   struct vkr_resource *res = vkr_context_get_resource(ctx, res_info->resourceId);
-   if (!res) {
-      vkr_log("failed to import resource: invalid res_id %u", res_info->resourceId);
-      vkr_context_set_fatal(ctx);
-      return false;
-   }
-
-   VkExternalMemoryHandleTypeFlagBits handle_type;
-   switch (res->fd_type) {
-   case VIRGL_RESOURCE_FD_DMABUF:
-      handle_type = VK_EXTERNAL_MEMORY_HANDLE_TYPE_DMA_BUF_BIT_EXT;
-      break;
-   case VIRGL_RESOURCE_FD_OPAQUE:
-      handle_type = VK_EXTERNAL_MEMORY_HANDLE_TYPE_OPAQUE_FD_BIT;
-      break;
-   default:
-      return false;
-   }
-
-   if (!res->fd_valid)
-      return false;
-
-   int fd = os_dupfd_cloexec(res->u.fd);
-   if (fd < 0)
-      return false;
-
-   *out = (VkImportMemoryFdInfoKHR){
-      .sType = VK_STRUCTURE_TYPE_IMPORT_MEMORY_FD_INFO_KHR,
-      .pNext = res_info->pNext,
-      .fd = fd,
-      .handleType = handle_type,
-   };
-   return true;
-}
-
 #if defined(HAVE_LINUX_UDMABUF_H) && defined(HAVE_MEMFD_CREATE)
 #include <fcntl.h>
 #include <linux/udmabuf.h>
@@ -338,6 +298,57 @@ vkr_shm_destroy(struct vkr_shm *shm)
    free(shm);
 }
 
+struct vkr_blob_mem_info {
+   VkImportMemoryFdInfoKHR fd;
+   void *gbm_bo;
+   int udmabuf_fd;
+
+   VkImportMemoryHostPointerInfoEXT host_ptr;
+   struct vkr_shm *shm;
+};
+
+static bool
+vkr_fix_import_info(struct vkr_context *ctx,
+                    void *prev_of_res_info,
+                    struct vkr_blob_mem_info *local_info)
+{
+   const VkImportMemoryResourceInfoMESA *res_info = vkr_pnext_get_next(prev_of_res_info);
+   struct vkr_resource *res = vkr_context_get_resource(ctx, res_info->resourceId);
+   if (!res) {
+      vkr_log("failed to import resource: invalid res_id %u", res_info->resourceId);
+      vkr_context_set_fatal(ctx);
+      return false;
+   }
+
+   if (!res->fd_valid)
+      return false;
+
+   VkExternalMemoryHandleTypeFlagBits handle_type;
+   switch (res->fd_type) {
+   case VIRGL_RESOURCE_FD_DMABUF:
+      handle_type = VK_EXTERNAL_MEMORY_HANDLE_TYPE_DMA_BUF_BIT_EXT;
+      break;
+   case VIRGL_RESOURCE_FD_OPAQUE:
+      handle_type = VK_EXTERNAL_MEMORY_HANDLE_TYPE_OPAQUE_FD_BIT;
+      break;
+   default:
+      return false;
+   }
+
+   int fd = os_dupfd_cloexec(res->u.fd);
+   if (fd < 0)
+      return false;
+
+   local_info->fd = (VkImportMemoryFdInfoKHR){
+      .sType = VK_STRUCTURE_TYPE_IMPORT_MEMORY_FD_INFO_KHR,
+      .pNext = res_info->pNext,
+      .fd = fd,
+      .handleType = handle_type,
+   };
+   vkr_pnext_set_next(prev_of_res_info, &local_info->fd);
+   return true;
+}
+
 static void
 vkr_dispatch_vkAllocateMemory(struct vn_dispatch_context *dispatch,
                               struct vn_command_vkAllocateMemory *args)
@@ -355,18 +366,17 @@ vkr_dispatch_vkAllocateMemory(struct vn_dispatch_context *dispatch,
    }
 
    /* translate VkImportMemoryResourceInfoMESA into VkImportMemoryFdInfoKHR in place */
-   VkImportMemoryFdInfoKHR local_import_info = { .fd = -1 };
-   VkImportMemoryResourceInfoMESA *res_info = NULL;
+   struct vkr_blob_mem_info blob_info = {
+      .fd = { .fd = -1 },
+      .udmabuf_fd = -1,
+   };
    void *prev_of_res_info = vkr_find_prev_struct(
       alloc_info, VK_STRUCTURE_TYPE_IMPORT_MEMORY_RESOURCE_INFO_MESA);
    if (prev_of_res_info) {
-      res_info = (VkImportMemoryResourceInfoMESA *)vkr_pnext_get_next(prev_of_res_info);
-      if (!vkr_get_fd_info_from_resource_info(ctx, res_info, &local_import_info)) {
+      if (!vkr_fix_import_info(ctx, prev_of_res_info, &blob_info)) {
          args->ret = VK_ERROR_INVALID_EXTERNAL_HANDLE;
          return;
       }
-
-      vkr_pnext_set_next(prev_of_res_info, &local_import_info);
    }
 
    VkExportMemoryAllocateInfo *export_info =
@@ -376,7 +386,7 @@ vkr_dispatch_vkAllocateMemory(struct vn_dispatch_context *dispatch,
     * - is_import: resource has been attached, and now used for import
     * - might_export: resource to be created, via exportable alloc
     */
-   const bool is_import = res_info != NULL;
+   const bool is_import = prev_of_res_info != NULL;
    const bool might_export = !is_import && export_info && export_info->handleTypes;
 
    /* Strip export info when importing from an existing resource, since guest
@@ -402,11 +412,7 @@ vkr_dispatch_vkAllocateMemory(struct vn_dispatch_context *dispatch,
 
    const bool host_visible = property_flags & VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT;
    uint32_t valid_fd_types = 0;
-   int udmabuf_fd = -1;
-   void *gbm_bo = NULL;
-   struct vkr_shm *shm = NULL;
    VkExportMemoryAllocateInfo local_export_info;
-   VkImportMemoryHostPointerInfoEXT local_host_import;
 
    if ((host_visible || might_export) && !is_import) {
       /* An implementation can support dma_buf import along with opaque fd export/import.
@@ -463,8 +469,8 @@ vkr_dispatch_vkAllocateMemory(struct vn_dispatch_context *dispatch,
          /* Allocate shm and import it as host memory. */
          const VkDeviceSize alignment =
             physical_dev->host_ptr_props.minImportedHostPointerAlignment;
-         shm = vkr_shm_create(-1, alloc_info->allocationSize, alignment);
-         if (!shm) {
+         blob_info.shm = vkr_shm_create(-1, alloc_info->allocationSize, alignment);
+         if (!blob_info.shm) {
             args->ret = VK_ERROR_OUT_OF_HOST_MEMORY;
             return;
          }
@@ -474,7 +480,7 @@ vkr_dispatch_vkAllocateMemory(struct vn_dispatch_context *dispatch,
          };
          args->ret = dev->GetMemoryHostPointerPropertiesEXT(
             dev->base.handle.device,
-            VK_EXTERNAL_MEMORY_HANDLE_TYPE_HOST_ALLOCATION_BIT_EXT, shm->ptr,
+            VK_EXTERNAL_MEMORY_HANDLE_TYPE_HOST_ALLOCATION_BIT_EXT, blob_info.shm->ptr,
             &host_props);
          /* alloc_info->memoryTypeIndex is the driver's index, which the memory
           * type spoof may have shifted from the one the guest asked for
@@ -486,18 +492,18 @@ vkr_dispatch_vkAllocateMemory(struct vn_dispatch_context *dispatch,
             args->ret = VK_ERROR_INVALID_EXTERNAL_HANDLE;
          }
          if (args->ret != VK_SUCCESS) {
-            vkr_shm_destroy(shm);
+            vkr_shm_destroy(blob_info.shm);
             return;
          }
 
-         local_host_import = (VkImportMemoryHostPointerInfoEXT){
+         blob_info.host_ptr = (VkImportMemoryHostPointerInfoEXT){
             .sType = VK_STRUCTURE_TYPE_IMPORT_MEMORY_HOST_POINTER_INFO_EXT,
             .pNext = alloc_info->pNext,
             .handleType = VK_EXTERNAL_MEMORY_HANDLE_TYPE_HOST_ALLOCATION_BIT_EXT,
-            .pHostPointer = shm->ptr,
+            .pHostPointer = blob_info.shm->ptr,
          };
-         alloc_info->pNext = &local_host_import;
-         alloc_info->allocationSize = shm->size;
+         alloc_info->pNext = &blob_info.host_ptr;
+         alloc_info->allocationSize = blob_info.shm->size;
          valid_fd_types = 1 << VIRGL_RESOURCE_FD_SHM;
          strip_export_info = true;
       } else if (physical_dev->EXT_external_memory_dma_buf) {
@@ -508,15 +514,15 @@ vkr_dispatch_vkAllocateMemory(struct vn_dispatch_context *dispatch,
              * - size_limit_mb: Max size of a dmabuf, in megabytes. Default is 64.
              */
             args->ret = vkr_udmabuf_get_fd_info_from_allocation_info(
-               physical_dev, alloc_info, &udmabuf_fd, &local_import_info);
+               physical_dev, alloc_info, &blob_info.udmabuf_fd, &blob_info.fd);
          } else {
             args->ret = vkr_gbm_get_fd_info_from_allocation_info(
-               physical_dev, alloc_info, &gbm_bo, &local_import_info);
+               physical_dev, alloc_info, &blob_info.gbm_bo, &blob_info.fd);
          }
          if (args->ret != VK_SUCCESS)
             return;
 
-         alloc_info->pNext = &local_import_info;
+         alloc_info->pNext = &blob_info.fd;
          valid_fd_types = 1 << VIRGL_RESOURCE_FD_DMABUF;
          strip_export_info = true;
       }
@@ -538,13 +544,13 @@ vkr_dispatch_vkAllocateMemory(struct vn_dispatch_context *dispatch,
 
    struct vkr_device_memory *mem = vkr_device_memory_create_and_add(ctx, args);
    if (!mem) {
-      if (local_import_info.fd >= 0)
-         close(local_import_info.fd);
-      if (gbm_bo)
-         vkr_gbm_bo_destroy(gbm_bo);
-      if (udmabuf_fd >= 0)
-         close(udmabuf_fd);
-      vkr_shm_destroy(shm);
+      if (blob_info.fd.fd >= 0)
+         close(blob_info.fd.fd);
+      if (blob_info.gbm_bo)
+         vkr_gbm_bo_destroy(blob_info.gbm_bo);
+      if (blob_info.udmabuf_fd >= 0)
+         close(blob_info.udmabuf_fd);
+      vkr_shm_destroy(blob_info.shm);
       return;
    }
 
@@ -552,9 +558,9 @@ vkr_dispatch_vkAllocateMemory(struct vn_dispatch_context *dispatch,
    mem->might_export = might_export;
    mem->property_flags = property_flags;
    mem->valid_fd_types = valid_fd_types;
-   mem->udmabuf_fd = udmabuf_fd;
-   mem->gbm_bo = gbm_bo;
-   mem->shm = shm;
+   mem->udmabuf_fd = blob_info.udmabuf_fd;
+   mem->gbm_bo = blob_info.gbm_bo;
+   mem->shm = blob_info.shm;
    mem->allocation_size = alloc_info->allocationSize;
    mem->memory_type_index = alloc_info->memoryTypeIndex;
 }
