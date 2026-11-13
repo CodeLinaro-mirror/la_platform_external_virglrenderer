@@ -30,11 +30,6 @@ struct vkr_physical_device {
 
    bool EXT_external_memory_host;
 
-   /* the host cannot export memory as an fd, so memory the guest may map is
-    * POSIX shm imported as host memory
-    */
-   bool use_host_memory_import;
-
    VkPhysicalDeviceMemoryProperties memory_properties;
    bool mem_type_spoof;
    VkPhysicalDeviceIDProperties id_properties;

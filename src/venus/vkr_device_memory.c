@@ -387,6 +387,9 @@ vkr_dispatch_vkAllocateMemory(struct vn_dispatch_context *dispatch,
          !(export_info->handleTypes & VK_EXTERNAL_MEMORY_HANDLE_TYPE_DMA_BUF_BIT_EXT);
       const bool force_gbm_import = !!physical_dev->gbm_device;
       const bool force_udmabuf_import = physical_dev->udmabuf_dev_fd >= 0;
+      const bool use_host_memory_import = physical_dev->EXT_external_memory_host &&
+                                          !physical_dev->KHR_external_memory_fd &&
+                                          !physical_dev->EXT_external_memory_dma_buf;
       if (!(force_gbm_import || force_udmabuf_import) &&
           (physical_dev->is_dma_buf_fd_export_supported ||
            (physical_dev->is_opaque_fd_export_supported && no_dma_buf_export))) {
@@ -424,7 +427,7 @@ vkr_dispatch_vkAllocateMemory(struct vn_dispatch_context *dispatch,
                   align(alloc_info->allocationSize, getpagesize());
             }
          }
-      } else if (physical_dev->use_host_memory_import) {
+      } else if (use_host_memory_import) {
          /* Allocate shm and import it as host memory. */
          const VkDeviceSize alignment =
             physical_dev->host_ptr_props.minImportedHostPointerAlignment;

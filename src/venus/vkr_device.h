@@ -27,7 +27,7 @@ struct vkr_device {
    mtx_t object_mutex;
    struct list_head objects;
 
-   /* set when the physical device imports host memory for the guest */
+   /* set when EXT_external_memory_host is supported */
    PFN_vkGetMemoryHostPointerPropertiesEXT GetMemoryHostPointerPropertiesEXT;
 };
 VKR_DEFINE_OBJECT_CAST(device, VK_OBJECT_TYPE_DEVICE, VkDevice)

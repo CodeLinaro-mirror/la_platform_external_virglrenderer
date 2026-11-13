@@ -372,10 +372,8 @@ vkr_physical_device_init_extensions(struct vkr_physical_device *physical_dev)
     *
     * TODO: Remove after mesa!40478 has had sufficient distro uptake.
     */
-   physical_dev->use_host_memory_import = physical_dev->EXT_external_memory_host &&
-                                          !physical_dev->KHR_external_memory_fd &&
-                                          !physical_dev->EXT_external_memory_dma_buf;
-   if (physical_dev->use_host_memory_import) {
+   if (physical_dev->EXT_external_memory_host && !physical_dev->KHR_external_memory_fd &&
+       !physical_dev->EXT_external_memory_dma_buf) {
       VkExtensionProperties *new_exts =
          realloc(exts, sizeof(*exts) * (advertised_count + 1));
       if (new_exts) {
