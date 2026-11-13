@@ -7,6 +7,7 @@
 
 #include <math.h>
 #include <sys/mman.h>
+#include <sys/stat.h>
 #include <unistd.h>
 
 #include "util/anon_file.h"
@@ -288,17 +289,28 @@ vkr_shm_map_aligned(int fd, size_t size, size_t alignment)
    return ptr;
 }
 
+/* Create a shm for host memory import. With a valid fd, the existing shm behind it is
+ * mapped again instead, and the fd remains owned by the caller.
+ */
 static struct vkr_shm *
-vkr_shm_alloc(uint64_t size, uint64_t alignment)
+vkr_shm_create(int fd, uint64_t size, uint64_t alignment)
 {
    alignment = MAX2(alignment, (uint64_t)getpagesize());
    const size_t aligned_size = align64(size, alignment);
+
+   if (fd >= 0) {
+      /* the aligned size must be backed by the existing shm as well */
+      struct stat st;
+      if (fstat(fd, &st) || st.st_size < 0 || (uint64_t)st.st_size < aligned_size)
+         return NULL;
+   }
 
    struct vkr_shm *shm = calloc(1, sizeof(*shm));
    if (!shm)
       return NULL;
 
-   shm->fd = os_create_anonymous_file(aligned_size, "vkr-host-mem");
+   shm->fd = fd < 0 ? os_create_anonymous_file(aligned_size, "vkr-host-mem")
+                    : os_dupfd_cloexec(fd);
    if (shm->fd < 0) {
       free(shm);
       return NULL;
@@ -316,7 +328,7 @@ vkr_shm_alloc(uint64_t size, uint64_t alignment)
 }
 
 static void
-vkr_shm_free(struct vkr_shm *shm)
+vkr_shm_destroy(struct vkr_shm *shm)
 {
    if (!shm)
       return;
@@ -447,7 +459,7 @@ vkr_dispatch_vkAllocateMemory(struct vn_dispatch_context *dispatch,
          /* Allocate shm and import it as host memory. */
          const VkDeviceSize alignment =
             physical_dev->host_ptr_props.minImportedHostPointerAlignment;
-         shm = vkr_shm_alloc(alloc_info->allocationSize, alignment);
+         shm = vkr_shm_create(-1, alloc_info->allocationSize, alignment);
          if (!shm) {
             args->ret = VK_ERROR_OUT_OF_HOST_MEMORY;
             return;
@@ -470,7 +482,7 @@ vkr_dispatch_vkAllocateMemory(struct vn_dispatch_context *dispatch,
             args->ret = VK_ERROR_INVALID_EXTERNAL_HANDLE;
          }
          if (args->ret != VK_SUCCESS) {
-            vkr_shm_free(shm);
+            vkr_shm_destroy(shm);
             return;
          }
 
@@ -526,7 +538,7 @@ vkr_dispatch_vkAllocateMemory(struct vn_dispatch_context *dispatch,
          close(local_import_info.fd);
       if (gbm_bo)
          vkr_gbm_bo_destroy(gbm_bo);
-      vkr_shm_free(shm);
+      vkr_shm_destroy(shm);
       return;
    }
 
@@ -660,7 +672,7 @@ vkr_context_init_device_memory_dispatch(struct vkr_context *ctx)
 void
 vkr_device_memory_release(struct vkr_device_memory *mem)
 {
-   vkr_shm_free(mem->shm);
+   vkr_shm_destroy(mem->shm);
    if (mem->gbm_bo)
       vkr_gbm_bo_destroy(mem->gbm_bo);
    if (mem->udmabuf_fd >= 0)
