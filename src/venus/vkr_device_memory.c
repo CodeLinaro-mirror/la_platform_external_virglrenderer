@@ -372,13 +372,17 @@ vkr_dispatch_vkAllocateMemory(struct vn_dispatch_context *dispatch,
    VkExportMemoryAllocateInfo *export_info =
       vkr_find_struct(alloc_info->pNext, VK_STRUCTURE_TYPE_EXPORT_MEMORY_ALLOCATE_INFO);
 
-   /* track if driver has requested export allocation */
-   const bool might_export = export_info && export_info->handleTypes;
+   /* For external memory:
+    * - is_import: resource has been attached, and now used for import
+    * - might_export: resource to be created, via exportable alloc
+    */
+   const bool is_import = res_info != NULL;
+   const bool might_export = !is_import && export_info && export_info->handleTypes;
 
    /* Strip export info when importing from an existing resource, since guest
     * re-export uses that resource directly rather than exporting this memory.
     */
-   bool strip_export_info = !!res_info;
+   bool strip_export_info = is_import;
 
    /* XXX Force dma_buf/opaque fd export or gbm bo import until a new extension that
     * supports direct export from host visible memory
@@ -404,7 +408,7 @@ vkr_dispatch_vkAllocateMemory(struct vn_dispatch_context *dispatch,
    VkExportMemoryAllocateInfo local_export_info;
    VkImportMemoryHostPointerInfoEXT local_host_import;
 
-   if ((host_visible || might_export) && !res_info) {
+   if ((host_visible || might_export) && !is_import) {
       /* An implementation can support dma_buf import along with opaque fd export/import.
        * If the client driver is using external memory and requesting dma_buf, without
        * dma_buf fd export support, we must use gbm bo import path instead of forcing
