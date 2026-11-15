@@ -391,9 +391,6 @@ vkr_dispatch_vkAllocateMemory(struct vn_dispatch_context *dispatch,
       return;
    }
 
-   /* translate VkImportMemoryResourceInfoMESA into VkImportMemoryFdInfoKHR or
-    * VkImportMemoryHostPointerInfoEXT in place
-    */
    struct vkr_blob_mem_info blob_info = {
       .fd = { .fd = -1 },
       .udmabuf_fd = -1,
@@ -401,6 +398,7 @@ vkr_dispatch_vkAllocateMemory(struct vn_dispatch_context *dispatch,
    void *prev_of_res_info = vkr_find_prev_struct(
       alloc_info, VK_STRUCTURE_TYPE_IMPORT_MEMORY_RESOURCE_INFO_MESA);
    if (prev_of_res_info) {
+      /* translate VkImportMemoryResourceInfoMESA into import info in place */
       if (!vkr_fix_import_info(ctx, physical_dev, alloc_info, prev_of_res_info,
                                &blob_info)) {
          args->ret = VK_ERROR_INVALID_EXTERNAL_HANDLE;
@@ -411,20 +409,8 @@ vkr_dispatch_vkAllocateMemory(struct vn_dispatch_context *dispatch,
    VkExportMemoryAllocateInfo *export_info =
       vkr_find_struct(alloc_info->pNext, VK_STRUCTURE_TYPE_EXPORT_MEMORY_ALLOCATE_INFO);
 
-   /* For external memory:
-    * - is_import: resource has been attached, and now used for import
-    * - might_export: resource to be created, via exportable alloc
-    */
-   const bool is_import = prev_of_res_info != NULL;
-   const bool might_export = !is_import && export_info && export_info->handleTypes;
-
-   /* Strip export info when importing from an existing resource, since guest
-    * re-export uses that resource directly rather than exporting this memory.
-    */
-   bool strip_export_info = is_import;
-
-   /* XXX Force dma_buf/opaque fd export or gbm bo import until a new extension that
-    * supports direct export from host visible memory
+   /* XXX Force external memory export or import until a new extension that supports
+    * direct export from host visible memory.
     *
     * Most VkImage and VkBuffer are non-external while most VkDeviceMemory are external
     * if allocated with a host visible memory type. We still violate the spec by binding
@@ -439,16 +425,23 @@ vkr_dispatch_vkAllocateMemory(struct vn_dispatch_context *dispatch,
    if (physical_dev->mem_type_spoof && mem_type_index > 0)
       alloc_info->memoryTypeIndex = mem_type_index - 1;
 
-   const bool host_visible = property_flags & VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT;
+   const bool is_import = prev_of_res_info != NULL;
+   const bool might_export_to_map =
+      !is_import && (property_flags & VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT);
+   const bool might_export_to_share =
+      !is_import && export_info && export_info->handleTypes;
+
+   /* Strip export info when importing from an existing resource, since guest
+    * re-export uses that resource directly rather than exporting this memory.
+    *
+    * Also strip export info when forcing import for any export case below.
+    */
+   bool strip_export_info = is_import;
+
    uint32_t valid_fd_types = 0;
    VkExportMemoryAllocateInfo local_export_info;
 
-   if ((host_visible || might_export) && !is_import) {
-      /* An implementation can support dma_buf import along with opaque fd export/import.
-       * If the client driver is using external memory and requesting dma_buf, without
-       * dma_buf fd export support, we must use gbm bo import path instead of forcing
-       * opaque fd export. e.g. the client driver uses external memory for wsi image.
-       */
+   if (might_export_to_map || might_export_to_share) {
       const bool no_dma_buf_export =
          !export_info ||
          !(export_info->handleTypes & VK_EXTERNAL_MEMORY_HANDLE_TYPE_DMA_BUF_BIT_EXT);
@@ -594,7 +587,7 @@ vkr_dispatch_vkAllocateMemory(struct vn_dispatch_context *dispatch,
    }
 
    mem->device = dev;
-   mem->might_export = might_export;
+   mem->might_export_to_share = might_export_to_share;
    mem->property_flags = property_flags;
    mem->valid_fd_types = valid_fd_types;
    mem->udmabuf_fd = blob_info.udmabuf_fd;

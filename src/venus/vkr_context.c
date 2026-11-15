@@ -345,12 +345,13 @@ vkr_context_create_resource_from_device_memory(struct vkr_context *ctx,
    if (!vkr_device_memory_export_blob(mem, blob_size, blob_flags, &blob))
       return false;
 
-   /* If memory might get exported, store a dup'ed fd in vkr_resource for:
-    * - vkAllocateMemory for dma_buf import
-    * - vkGetMemoryFdPropertiesKHR for dma_buf fd properties query
+   /* If memory might get exported for external memory sharing purpose, store a
+    * dup'ed fd in vkr_resource for:
+    * - vkAllocateMemory for external memory re-import
+    * - vkGetMemoryResourcePropertiesMESA for properties query
     */
    int res_fd = -1;
-   if (mem->might_export) {
+   if (mem->might_export_to_share) {
       res_fd = os_dupfd_cloexec(blob.u.fd);
       if (res_fd < 0) {
          close(blob.u.fd);
