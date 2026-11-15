@@ -542,6 +542,8 @@ vkr_dispatch_vkAllocateMemory(struct vn_dispatch_context *dispatch,
          close(local_import_info.fd);
       if (gbm_bo)
          vkr_gbm_bo_destroy(gbm_bo);
+      if (udmabuf_fd >= 0)
+         close(udmabuf_fd);
       vkr_shm_destroy(shm);
       return;
    }
