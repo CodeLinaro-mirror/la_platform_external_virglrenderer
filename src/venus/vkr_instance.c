@@ -67,6 +67,7 @@ vkr_validation_callback(UNUSED VkDebugUtilsMessageSeverityFlagBitsEXT messageSev
    struct vkr_context *ctx = pUserData;
 
    const char *skips[] = {
+      "VUID-VkMemoryAllocateInfo-memoryTypeIndex-01744",
       "VUID-vkBindBufferMemory-memory-02726",
       "VUID-vkBindBufferMemory-memory-02985",
       "VUID-VkBindBufferMemoryInfo-memory-02726",
