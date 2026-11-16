@@ -298,6 +298,61 @@ vkr_shm_destroy(struct vkr_shm *shm)
    free(shm);
 }
 
+static VkResult
+vkr_shm_get_host_ptr_info_from_allocation_info(
+   struct vkr_device *dev,
+   const VkMemoryAllocateInfo *alloc_info,
+   struct vkr_shm **out_shm,
+   VkImportMemoryHostPointerInfoEXT *out_host_ptr_info)
+{
+   const struct vkr_physical_device *physical_dev = dev->physical_device;
+   const VkDeviceSize alignment =
+      physical_dev->host_ptr_props.minImportedHostPointerAlignment;
+   struct vkr_shm *shm = vkr_shm_create(-1, alloc_info->allocationSize, alignment);
+   if (!shm)
+      return VK_ERROR_OUT_OF_HOST_MEMORY;
+
+   /* Drivers tend to only report cached memory types for host pointer import, so
+    * that they don't have to reason about the cache mode associated with the
+    * imported pages. Since none of the hw drivers assigns different VA space for
+    * coherent vs cached memory types, the import can be safely routed to the
+    * non-cached memory types as well:
+    * - for VM setup, coherency is maintained by the hypervisor, according to the
+    *   cache mode picked when setting up the nested pages
+    * - for vtest setup, it's at best effort since cache management is not wired
+    *   over the vtest protocol
+    *
+    * So the reported memory types are only checked for debugging purposes.
+    */
+   if (VKR_DEBUG(HOST_PTR)) {
+      VkMemoryHostPointerPropertiesEXT host_props = {
+         .sType = VK_STRUCTURE_TYPE_MEMORY_HOST_POINTER_PROPERTIES_EXT,
+      };
+      const VkResult result = dev->GetMemoryHostPointerPropertiesEXT(
+         dev->base.handle.device, VK_EXTERNAL_MEMORY_HANDLE_TYPE_HOST_ALLOCATION_BIT_EXT,
+         shm->ptr, &host_props);
+      /* alloc_info->memoryTypeIndex is the driver's index, which the memory
+       * type spoof may have shifted from the one the guest asked for
+       */
+      if (result != VK_SUCCESS ||
+          !(host_props.memoryTypeBits & (1u << alloc_info->memoryTypeIndex))) {
+         vkr_log("host memory import is unsupported for memory type %u "
+                 "(vk ret %d, memoryTypeBits 0x%x)",
+                 alloc_info->memoryTypeIndex, result, host_props.memoryTypeBits);
+      }
+   }
+
+   *out_shm = shm;
+   *out_host_ptr_info = (VkImportMemoryHostPointerInfoEXT){
+      .sType = VK_STRUCTURE_TYPE_IMPORT_MEMORY_HOST_POINTER_INFO_EXT,
+      .pNext = alloc_info->pNext,
+      .handleType = VK_EXTERNAL_MEMORY_HANDLE_TYPE_HOST_ALLOCATION_BIT_EXT,
+      .pHostPointer = shm->ptr,
+   };
+
+   return VK_SUCCESS;
+}
+
 struct vkr_blob_mem_info {
    VkImportMemoryFdInfoKHR fd;
    void *gbm_bo;
@@ -489,51 +544,11 @@ vkr_dispatch_vkAllocateMemory(struct vn_dispatch_context *dispatch,
          }
       } else if (use_host_memory_import) {
          /* Allocate shm and import it as host memory. */
-         const VkDeviceSize alignment =
-            physical_dev->host_ptr_props.minImportedHostPointerAlignment;
-         blob_info.shm = vkr_shm_create(-1, alloc_info->allocationSize, alignment);
-         if (!blob_info.shm) {
-            args->ret = VK_ERROR_OUT_OF_HOST_MEMORY;
+         args->ret = vkr_shm_get_host_ptr_info_from_allocation_info(
+            dev, alloc_info, &blob_info.shm, &blob_info.host_ptr);
+         if (args->ret != VK_SUCCESS)
             return;
-         }
 
-         /* Drivers tend to only report cached memory types for host pointer import, so
-          * that they don't have to reason about the cache mode associated with the
-          * imported pages. Since none of the hw drivers assigns different VA space for
-          * coherent vs cached memory types, the import can be safely routed to the
-          * non-cached memory types as well:
-          * - for VM setup, coherency is maintained by the hypervisor, according to the
-          *   cache mode picked when setting up the nested pages
-          * - for vtest setup, it's at best effort since cache management is not wired
-          *   over the vtest protocol
-          *
-          * So the reported memory types are only checked for debugging purposes.
-          */
-         if (VKR_DEBUG(HOST_PTR)) {
-            VkMemoryHostPointerPropertiesEXT host_props = {
-               .sType = VK_STRUCTURE_TYPE_MEMORY_HOST_POINTER_PROPERTIES_EXT,
-            };
-            const VkResult result = dev->GetMemoryHostPointerPropertiesEXT(
-               dev->base.handle.device,
-               VK_EXTERNAL_MEMORY_HANDLE_TYPE_HOST_ALLOCATION_BIT_EXT, blob_info.shm->ptr,
-               &host_props);
-            /* alloc_info->memoryTypeIndex is the driver's index, which the memory
-             * type spoof may have shifted from the one the guest asked for
-             */
-            if (result != VK_SUCCESS ||
-                !(host_props.memoryTypeBits & (1u << alloc_info->memoryTypeIndex))) {
-               vkr_log("host memory import is unsupported for memory type %u "
-                       "(vk ret %d, memoryTypeBits 0x%x)",
-                       alloc_info->memoryTypeIndex, result, host_props.memoryTypeBits);
-            }
-         }
-
-         blob_info.host_ptr = (VkImportMemoryHostPointerInfoEXT){
-            .sType = VK_STRUCTURE_TYPE_IMPORT_MEMORY_HOST_POINTER_INFO_EXT,
-            .pNext = alloc_info->pNext,
-            .handleType = VK_EXTERNAL_MEMORY_HANDLE_TYPE_HOST_ALLOCATION_BIT_EXT,
-            .pHostPointer = blob_info.shm->ptr,
-         };
          alloc_info->pNext = &blob_info.host_ptr;
          alloc_info->allocationSize = blob_info.shm->size;
          valid_fd_types = 1 << VIRGL_RESOURCE_FD_SHM;
