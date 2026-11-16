@@ -360,6 +360,10 @@ struct vkr_blob_mem_info {
 
    VkImportMemoryHostPointerInfoEXT host_ptr;
    struct vkr_shm *shm;
+
+   VkExportMemoryAllocateInfo export;
+
+   uint32_t valid_fd_types;
 };
 
 static bool
@@ -430,6 +434,64 @@ vkr_fix_import_info(struct vkr_context *ctx,
    return true;
 }
 
+static VkResult
+vkr_fix_export_info(struct vkr_device *dev,
+                    VkMemoryAllocateInfo *alloc_info,
+                    bool is_import,
+                    void *prev_of_export_info,
+                    struct vkr_blob_mem_info *local_info)
+{
+   struct vkr_physical_device *physical_dev = dev->physical_device;
+   const VkExportMemoryAllocateInfo *export_info =
+      vkr_pnext_get_next(prev_of_export_info);
+
+   /* strip the original export_info from the pNext chain */
+   vkr_pnext_set_next(prev_of_export_info, export_info->pNext);
+
+   if (is_import || !export_info->handleTypes)
+      return VK_SUCCESS;
+
+   if ((export_info->handleTypes & VK_EXTERNAL_MEMORY_HANDLE_TYPE_DMA_BUF_BIT_EXT) &&
+       physical_dev->is_dma_buf_fd_export_supported) {
+      local_info->export = (VkExportMemoryAllocateInfo){
+         .sType = VK_STRUCTURE_TYPE_EXPORT_MEMORY_ALLOCATE_INFO,
+         .pNext = alloc_info->pNext,
+         .handleTypes = VK_EXTERNAL_MEMORY_HANDLE_TYPE_DMA_BUF_BIT_EXT,
+      };
+      alloc_info->pNext = &local_info->export;
+      local_info->valid_fd_types = 1 << VIRGL_RESOURCE_FD_DMABUF;
+      return VK_SUCCESS;
+   }
+
+   if (physical_dev->gbm_device) {
+      assert(physical_dev->EXT_external_memory_dma_buf);
+      const VkResult result = vkr_gbm_get_fd_info_from_allocation_info(
+         physical_dev, alloc_info, &local_info->gbm_bo, &local_info->fd);
+      if (result != VK_SUCCESS)
+         return result;
+
+      alloc_info->pNext = &local_info->fd;
+      local_info->valid_fd_types = 1 << VIRGL_RESOURCE_FD_DMABUF;
+      return VK_SUCCESS;
+   }
+
+#ifdef __APPLE__
+   if (physical_dev->EXT_external_memory_host) {
+      const VkResult result = vkr_shm_get_host_ptr_info_from_allocation_info(
+         dev, alloc_info, &local_info->shm, &local_info->host_ptr);
+      if (result != VK_SUCCESS)
+         return result;
+
+      alloc_info->pNext = &local_info->host_ptr;
+      alloc_info->allocationSize = local_info->shm->size;
+      local_info->valid_fd_types = 1 << VIRGL_RESOURCE_FD_SHM;
+      return VK_SUCCESS;
+   }
+#endif
+
+   return VK_ERROR_OUT_OF_DEVICE_MEMORY;
+}
+
 static void
 vkr_dispatch_vkAllocateMemory(struct vn_dispatch_context *dispatch,
                               struct vn_command_vkAllocateMemory *args)
@@ -446,6 +508,11 @@ vkr_dispatch_vkAllocateMemory(struct vn_dispatch_context *dispatch,
       return;
    }
 
+   const uint32_t property_flags =
+      physical_dev->memory_properties.memoryTypes[mem_type_index].propertyFlags;
+   if (physical_dev->mem_type_spoof && mem_type_index > 0)
+      alloc_info->memoryTypeIndex = mem_type_index - 1;
+
    struct vkr_blob_mem_info blob_info = {
       .fd = { .fd = -1 },
       .udmabuf_fd = -1,
@@ -461,8 +528,21 @@ vkr_dispatch_vkAllocateMemory(struct vn_dispatch_context *dispatch,
       }
    }
 
-   VkExportMemoryAllocateInfo *export_info =
-      vkr_find_struct(alloc_info->pNext, VK_STRUCTURE_TYPE_EXPORT_MEMORY_ALLOCATE_INFO);
+   const bool is_import = prev_of_res_info != NULL;
+   bool might_export_to_share = false;
+   void *prev_of_export_info =
+      vkr_find_prev_struct(alloc_info, VK_STRUCTURE_TYPE_EXPORT_MEMORY_ALLOCATE_INFO);
+   if (prev_of_export_info) {
+      const VkExportMemoryAllocateInfo *export_info =
+         vkr_pnext_get_next(prev_of_export_info);
+      might_export_to_share = !is_import && export_info->handleTypes;
+
+      /* translate driver export info into renderer export info in place */
+      args->ret =
+         vkr_fix_export_info(dev, alloc_info, is_import, prev_of_export_info, &blob_info);
+      if (args->ret != VK_SUCCESS)
+         return;
+   }
 
    /* XXX Force external memory export or import until a new extension that supports
     * direct export from host visible memory.
@@ -473,77 +553,70 @@ vkr_dispatch_vkAllocateMemory(struct vn_dispatch_context *dispatch,
     * new extension.
     *
     * Skip forcing external if a valid VkImportMemoryResourceInfoMESA is provided, since
-    * the mapping will be directly set up from the existing virgl resource.
+    * the mapping will be directly set up from the existing virgl resource, or if
+    * might_export_to_share has already configured external backing above.
     */
-   const uint32_t property_flags =
-      physical_dev->memory_properties.memoryTypes[mem_type_index].propertyFlags;
-   if (physical_dev->mem_type_spoof && mem_type_index > 0)
-      alloc_info->memoryTypeIndex = mem_type_index - 1;
-
-   const bool is_import = prev_of_res_info != NULL;
    const bool might_export_to_map =
-      !is_import && (property_flags & VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT);
-   const bool might_export_to_share =
-      !is_import && export_info && export_info->handleTypes;
-
-   /* Strip export info when importing from an existing resource, since guest
-    * re-export uses that resource directly rather than exporting this memory.
-    *
-    * Also strip export info when forcing import for any export case below.
-    */
-   bool strip_export_info = is_import;
-
-   uint32_t valid_fd_types = 0;
-   VkExportMemoryAllocateInfo local_export_info;
-
-   if (might_export_to_map || might_export_to_share) {
-      const bool no_dma_buf_export =
-         !export_info ||
-         !(export_info->handleTypes & VK_EXTERNAL_MEMORY_HANDLE_TYPE_DMA_BUF_BIT_EXT);
+      !is_import && !might_export_to_share &&
+      (property_flags & VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT);
+   if (might_export_to_map) {
       const bool force_gbm_import = !!physical_dev->gbm_device;
       const bool force_udmabuf_import = physical_dev->udmabuf_dev_fd >= 0;
-      const bool use_host_memory_import = physical_dev->EXT_external_memory_host &&
-                                          !physical_dev->KHR_external_memory_fd &&
-                                          !physical_dev->EXT_external_memory_dma_buf;
       if (!(force_gbm_import || force_udmabuf_import) &&
           (physical_dev->is_dma_buf_fd_export_supported ||
-           (physical_dev->is_opaque_fd_export_supported && no_dma_buf_export))) {
+           physical_dev->is_opaque_fd_export_supported)) {
          const VkExternalMemoryHandleTypeFlagBits handle_type =
             physical_dev->is_dma_buf_fd_export_supported
                ? VK_EXTERNAL_MEMORY_HANDLE_TYPE_DMA_BUF_BIT_EXT
                : VK_EXTERNAL_MEMORY_HANDLE_TYPE_OPAQUE_FD_BIT;
-         if (export_info) {
-            export_info->handleTypes |= handle_type;
-         } else {
-            local_export_info = (const VkExportMemoryAllocateInfo){
-               .sType = VK_STRUCTURE_TYPE_EXPORT_MEMORY_ALLOCATE_INFO,
-               .pNext = alloc_info->pNext,
-               .handleTypes = handle_type,
-            };
-            export_info = &local_export_info;
-            alloc_info->pNext = &local_export_info;
+         blob_info.export = (VkExportMemoryAllocateInfo){
+            .sType = VK_STRUCTURE_TYPE_EXPORT_MEMORY_ALLOCATE_INFO,
+            .pNext = alloc_info->pNext,
+            .handleTypes = handle_type,
+         };
+         alloc_info->pNext = &blob_info.export;
+         blob_info.valid_fd_types = 1 << (physical_dev->is_dma_buf_fd_export_supported
+                                             ? VIRGL_RESOURCE_FD_DMABUF
+                                             : VIRGL_RESOURCE_FD_OPAQUE);
 
-            if (handle_type == VK_EXTERNAL_MEMORY_HANDLE_TYPE_OPAQUE_FD_BIT) {
-               /* Guest virtgpu kernel aligns up blob mem size to the page boundary. No
-                * matter dma-buf or opaque fd export allocation, the actual allocation
-                * in most cases would follow the same padding. For dma-buf, we are able
-                * to allocate and validate via lseek below. For opaque fd, Vulkan spec
-                * requires to use the same size with allocation time for the mapper,
-                * either vkr_allocator or vulkano, to import and populate the mapping.
-                * Accessible mapping given by vkMapMemory is normally limited to just the
-                * alloc size. When KVM register the mappings to guest pci bar, that
-                * involves an invalid chunk towards the end of the page boundary. As a
-                * result, any guest side accelerated instructions that rely on the
-                * paddings can end up with Illegal instruction error. The most common
-                * trigger is via memcpy'ing valid range to the guest side mapped buffer
-                * memory, and then, e.g. __memcpy_avx_unaligned_erms  can hit the error.
-                */
-               alloc_info->allocationSize =
-                  align(alloc_info->allocationSize, getpagesize());
-            }
+         if (handle_type == VK_EXTERNAL_MEMORY_HANDLE_TYPE_OPAQUE_FD_BIT) {
+            /* Guest virtgpu kernel aligns up blob mem size to the page boundary. No
+             * matter dma-buf or opaque fd export allocation, the actual allocation
+             * in most cases would follow the same padding. For dma-buf, we are able
+             * to allocate and validate via lseek below. For opaque fd, Vulkan spec
+             * requires to use the same size with allocation time for the mapper,
+             * either vkr_allocator or vulkano, to import and populate the mapping.
+             * Accessible mapping given by vkMapMemory is normally limited to just the
+             * alloc size. When KVM register the mappings to guest pci bar, that
+             * involves an invalid chunk towards the end of the page boundary. As a
+             * result, any guest side accelerated instructions that rely on the
+             * paddings can end up with Illegal instruction error. The most common
+             * trigger is via memcpy'ing valid range to the guest side mapped buffer
+             * memory, and then, e.g. __memcpy_avx_unaligned_erms  can hit the error.
+             */
+            alloc_info->allocationSize = align(alloc_info->allocationSize, getpagesize());
          }
-      } else if (use_host_memory_import) {
-         /* Allocate shm and import it as host memory. */
+      } else if (force_udmabuf_import) {
+         /* To be noted, there are 2 limits for udmabuf:
+          * - list_limit: udmabuf_create_list->count limit. Default is 1024.
+          * - size_limit_mb: Max size of a dmabuf, in megabytes. Default is 64.
+          */
+         args->ret = vkr_udmabuf_get_fd_info_from_allocation_info(
+            physical_dev, alloc_info, &blob_info.udmabuf_fd, &blob_info.fd);
+         if (args->ret != VK_SUCCESS)
+            return;
+
+         alloc_info->pNext = &blob_info.fd;
+         blob_info.valid_fd_types = 1 << VIRGL_RESOURCE_FD_DMABUF;
+      } else if (force_gbm_import) {
+         args->ret = vkr_gbm_get_fd_info_from_allocation_info(
+            physical_dev, alloc_info, &blob_info.gbm_bo, &blob_info.fd);
+         if (args->ret != VK_SUCCESS)
+            return;
+
+         alloc_info->pNext = &blob_info.fd;
+         blob_info.valid_fd_types = 1 << VIRGL_RESOURCE_FD_DMABUF;
+      } else if (physical_dev->EXT_external_memory_host) {
          args->ret = vkr_shm_get_host_ptr_info_from_allocation_info(
             dev, alloc_info, &blob_info.shm, &blob_info.host_ptr);
          if (args->ret != VK_SUCCESS)
@@ -551,42 +624,8 @@ vkr_dispatch_vkAllocateMemory(struct vn_dispatch_context *dispatch,
 
          alloc_info->pNext = &blob_info.host_ptr;
          alloc_info->allocationSize = blob_info.shm->size;
-         valid_fd_types = 1 << VIRGL_RESOURCE_FD_SHM;
-         strip_export_info = true;
-      } else if (physical_dev->EXT_external_memory_dma_buf) {
-         /* Allocate dma_buf externally and force to import. */
-         if (force_udmabuf_import) {
-            /* To be noted, there are 2 limits for udmabuf:
-             * - list_limit: udmabuf_create_list->count limit. Default is 1024.
-             * - size_limit_mb: Max size of a dmabuf, in megabytes. Default is 64.
-             */
-            args->ret = vkr_udmabuf_get_fd_info_from_allocation_info(
-               physical_dev, alloc_info, &blob_info.udmabuf_fd, &blob_info.fd);
-         } else {
-            args->ret = vkr_gbm_get_fd_info_from_allocation_info(
-               physical_dev, alloc_info, &blob_info.gbm_bo, &blob_info.fd);
-         }
-         if (args->ret != VK_SUCCESS)
-            return;
-
-         alloc_info->pNext = &blob_info.fd;
-         valid_fd_types = 1 << VIRGL_RESOURCE_FD_DMABUF;
-         strip_export_info = true;
+         blob_info.valid_fd_types = 1 << VIRGL_RESOURCE_FD_SHM;
       }
-   }
-
-   if (export_info && strip_export_info) {
-      void *prev_of_export_info =
-         vkr_find_prev_struct(alloc_info, VK_STRUCTURE_TYPE_EXPORT_MEMORY_ALLOCATE_INFO);
-      vkr_pnext_set_next(prev_of_export_info, export_info->pNext);
-      export_info = NULL;
-   }
-
-   if (export_info) {
-      if (export_info->handleTypes & VK_EXTERNAL_MEMORY_HANDLE_TYPE_OPAQUE_FD_BIT)
-         valid_fd_types |= 1 << VIRGL_RESOURCE_FD_OPAQUE;
-      if (export_info->handleTypes & VK_EXTERNAL_MEMORY_HANDLE_TYPE_DMA_BUF_BIT_EXT)
-         valid_fd_types |= 1 << VIRGL_RESOURCE_FD_DMABUF;
    }
 
    struct vkr_device_memory *mem = vkr_device_memory_create_and_add(ctx, args);
@@ -604,7 +643,7 @@ vkr_dispatch_vkAllocateMemory(struct vn_dispatch_context *dispatch,
    mem->device = dev;
    mem->might_export_to_share = might_export_to_share;
    mem->property_flags = property_flags;
-   mem->valid_fd_types = valid_fd_types;
+   mem->valid_fd_types = blob_info.valid_fd_types;
    mem->udmabuf_fd = blob_info.udmabuf_fd;
    mem->gbm_bo = blob_info.gbm_bo;
    mem->shm = blob_info.shm;
