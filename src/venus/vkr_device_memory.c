@@ -872,13 +872,19 @@ vkr_device_memory_export_blob(struct vkr_device_memory *mem,
          return false;
       }
 
+      int fd = os_dupfd_cloexec(mem->shm->fd);
+      if (fd < 0) {
+         vkr_log("mem shm fd dup failed (%s)", strerror(errno));
+         return false;
+      }
+
       mem->exported = true;
       *out_blob = (struct virgl_context_blob){
          .type = VIRGL_RESOURCE_FD_SHM,
-         .u.fd = os_dupfd_cloexec(mem->shm->fd),
+         .u.fd = fd,
          .map_info = map_info,
       };
-      return out_blob->u.fd >= 0;
+      return true;
    }
 
    const bool can_export_dma_buf = mem->valid_fd_types & (1 << VIRGL_RESOURCE_FD_DMABUF);
