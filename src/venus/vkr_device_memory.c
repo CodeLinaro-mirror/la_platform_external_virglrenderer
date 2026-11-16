@@ -492,6 +492,106 @@ vkr_fix_export_info(struct vkr_device *dev,
    return VK_ERROR_OUT_OF_DEVICE_MEMORY;
 }
 
+static VkResult
+vkr_fix_mappable_info(struct vkr_device *dev,
+                      VkMemoryAllocateInfo *alloc_info,
+                      struct vkr_blob_mem_info *local_info)
+{
+   /* XXX Force external memory export or import until a new extension that supports
+    * direct export from host visible memory.
+    *
+    * Most VkImage and VkBuffer are non-external while most VkDeviceMemory are external
+    * if allocated with a host visible memory type. We still violate the spec by binding
+    * external memory to non-external image or buffer, which needs spec changes with a
+    * new extension.
+    */
+   struct vkr_physical_device *physical_dev = dev->physical_device;
+   const bool force_gbm_import = !!physical_dev->gbm_device;
+   const bool force_udmabuf_import = physical_dev->udmabuf_dev_fd >= 0;
+   const bool support_export = physical_dev->is_dma_buf_fd_export_supported ||
+                               physical_dev->is_opaque_fd_export_supported;
+   const bool use_host_ptr_import =
+      physical_dev->EXT_external_memory_host && !support_export;
+
+   if (force_udmabuf_import) {
+      /* To be noted, there are 2 limits for udmabuf:
+       * - list_limit: udmabuf_create_list->count limit. Default is 1024.
+       * - size_limit_mb: Max size of a dmabuf, in megabytes. Default is 64.
+       */
+      const VkResult result = vkr_udmabuf_get_fd_info_from_allocation_info(
+         physical_dev, alloc_info, &local_info->udmabuf_fd, &local_info->fd);
+      if (result != VK_SUCCESS)
+         return result;
+
+      alloc_info->pNext = &local_info->fd;
+      local_info->valid_fd_types = 1 << VIRGL_RESOURCE_FD_DMABUF;
+      return VK_SUCCESS;
+   }
+
+   if (force_gbm_import) {
+      const VkResult result = vkr_gbm_get_fd_info_from_allocation_info(
+         physical_dev, alloc_info, &local_info->gbm_bo, &local_info->fd);
+      if (result != VK_SUCCESS)
+         return result;
+
+      alloc_info->pNext = &local_info->fd;
+      local_info->valid_fd_types = 1 << VIRGL_RESOURCE_FD_DMABUF;
+      return VK_SUCCESS;
+   }
+
+   if (use_host_ptr_import) {
+      const VkResult result = vkr_shm_get_host_ptr_info_from_allocation_info(
+         dev, alloc_info, &local_info->shm, &local_info->host_ptr);
+      if (result != VK_SUCCESS)
+         return result;
+
+      alloc_info->pNext = &local_info->host_ptr;
+      alloc_info->allocationSize = local_info->shm->size;
+      local_info->valid_fd_types = 1 << VIRGL_RESOURCE_FD_SHM;
+      return VK_SUCCESS;
+   }
+
+   if (support_export) {
+      VkExternalMemoryHandleTypeFlagBits handle_type;
+      enum virgl_resource_fd_type fd_type;
+
+      if (physical_dev->is_dma_buf_fd_export_supported) {
+         handle_type = VK_EXTERNAL_MEMORY_HANDLE_TYPE_DMA_BUF_BIT_EXT;
+         fd_type = VIRGL_RESOURCE_FD_DMABUF;
+      } else {
+         handle_type = VK_EXTERNAL_MEMORY_HANDLE_TYPE_OPAQUE_FD_BIT;
+         fd_type = VIRGL_RESOURCE_FD_OPAQUE;
+
+         /* Guest virtgpu kernel aligns up blob mem size to the page boundary. No
+          * matter dma-buf or opaque fd export allocation, the actual allocation
+          * in most cases would follow the same padding. For dma-buf, we are able
+          * to allocate and validate via lseek below. For opaque fd, Vulkan spec
+          * requires to use the same size with allocation time for the mapper,
+          * either vkr_allocator or vulkano, to import and populate the mapping.
+          * Accessible mapping given by vkMapMemory is normally limited to just the
+          * alloc size. When KVM register the mappings to guest pci bar, that
+          * involves an invalid chunk towards the end of the page boundary. As a
+          * result, any guest side accelerated instructions that rely on the
+          * paddings can end up with Illegal instruction error. The most common
+          * trigger is via memcpy'ing valid range to the guest side mapped buffer
+          * memory, and then, e.g. __memcpy_avx_unaligned_erms  can hit the error.
+          */
+         alloc_info->allocationSize = align(alloc_info->allocationSize, getpagesize());
+      }
+
+      local_info->export = (VkExportMemoryAllocateInfo){
+         .sType = VK_STRUCTURE_TYPE_EXPORT_MEMORY_ALLOCATE_INFO,
+         .pNext = alloc_info->pNext,
+         .handleTypes = handle_type,
+      };
+      alloc_info->pNext = &local_info->export;
+      local_info->valid_fd_types = 1 << fd_type;
+      return VK_SUCCESS;
+   }
+
+   return VK_SUCCESS;
+}
+
 static void
 vkr_dispatch_vkAllocateMemory(struct vn_dispatch_context *dispatch,
                               struct vn_command_vkAllocateMemory *args)
@@ -544,15 +644,7 @@ vkr_dispatch_vkAllocateMemory(struct vn_dispatch_context *dispatch,
          return;
    }
 
-   /* XXX Force external memory export or import until a new extension that supports
-    * direct export from host visible memory.
-    *
-    * Most VkImage and VkBuffer are non-external while most VkDeviceMemory are external
-    * if allocated with a host visible memory type. We still violate the spec by binding
-    * external memory to non-external image or buffer, which needs spec changes with a
-    * new extension.
-    *
-    * Skip forcing external if a valid VkImportMemoryResourceInfoMESA is provided, since
+   /* Skip forcing external if a valid VkImportMemoryResourceInfoMESA is provided, since
     * the mapping will be directly set up from the existing virgl resource, or if
     * might_export_to_share has already configured external backing above.
     */
@@ -560,72 +652,9 @@ vkr_dispatch_vkAllocateMemory(struct vn_dispatch_context *dispatch,
       !is_import && !might_export_to_share &&
       (property_flags & VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT);
    if (might_export_to_map) {
-      const bool force_gbm_import = !!physical_dev->gbm_device;
-      const bool force_udmabuf_import = physical_dev->udmabuf_dev_fd >= 0;
-      if (!(force_gbm_import || force_udmabuf_import) &&
-          (physical_dev->is_dma_buf_fd_export_supported ||
-           physical_dev->is_opaque_fd_export_supported)) {
-         const VkExternalMemoryHandleTypeFlagBits handle_type =
-            physical_dev->is_dma_buf_fd_export_supported
-               ? VK_EXTERNAL_MEMORY_HANDLE_TYPE_DMA_BUF_BIT_EXT
-               : VK_EXTERNAL_MEMORY_HANDLE_TYPE_OPAQUE_FD_BIT;
-         blob_info.export = (VkExportMemoryAllocateInfo){
-            .sType = VK_STRUCTURE_TYPE_EXPORT_MEMORY_ALLOCATE_INFO,
-            .pNext = alloc_info->pNext,
-            .handleTypes = handle_type,
-         };
-         alloc_info->pNext = &blob_info.export;
-         blob_info.valid_fd_types = 1 << (physical_dev->is_dma_buf_fd_export_supported
-                                             ? VIRGL_RESOURCE_FD_DMABUF
-                                             : VIRGL_RESOURCE_FD_OPAQUE);
-
-         if (handle_type == VK_EXTERNAL_MEMORY_HANDLE_TYPE_OPAQUE_FD_BIT) {
-            /* Guest virtgpu kernel aligns up blob mem size to the page boundary. No
-             * matter dma-buf or opaque fd export allocation, the actual allocation
-             * in most cases would follow the same padding. For dma-buf, we are able
-             * to allocate and validate via lseek below. For opaque fd, Vulkan spec
-             * requires to use the same size with allocation time for the mapper,
-             * either vkr_allocator or vulkano, to import and populate the mapping.
-             * Accessible mapping given by vkMapMemory is normally limited to just the
-             * alloc size. When KVM register the mappings to guest pci bar, that
-             * involves an invalid chunk towards the end of the page boundary. As a
-             * result, any guest side accelerated instructions that rely on the
-             * paddings can end up with Illegal instruction error. The most common
-             * trigger is via memcpy'ing valid range to the guest side mapped buffer
-             * memory, and then, e.g. __memcpy_avx_unaligned_erms  can hit the error.
-             */
-            alloc_info->allocationSize = align(alloc_info->allocationSize, getpagesize());
-         }
-      } else if (force_udmabuf_import) {
-         /* To be noted, there are 2 limits for udmabuf:
-          * - list_limit: udmabuf_create_list->count limit. Default is 1024.
-          * - size_limit_mb: Max size of a dmabuf, in megabytes. Default is 64.
-          */
-         args->ret = vkr_udmabuf_get_fd_info_from_allocation_info(
-            physical_dev, alloc_info, &blob_info.udmabuf_fd, &blob_info.fd);
-         if (args->ret != VK_SUCCESS)
-            return;
-
-         alloc_info->pNext = &blob_info.fd;
-         blob_info.valid_fd_types = 1 << VIRGL_RESOURCE_FD_DMABUF;
-      } else if (force_gbm_import) {
-         args->ret = vkr_gbm_get_fd_info_from_allocation_info(
-            physical_dev, alloc_info, &blob_info.gbm_bo, &blob_info.fd);
-         if (args->ret != VK_SUCCESS)
-            return;
-
-         alloc_info->pNext = &blob_info.fd;
-         blob_info.valid_fd_types = 1 << VIRGL_RESOURCE_FD_DMABUF;
-      } else if (physical_dev->EXT_external_memory_host) {
-         args->ret = vkr_shm_get_host_ptr_info_from_allocation_info(
-            dev, alloc_info, &blob_info.shm, &blob_info.host_ptr);
-         if (args->ret != VK_SUCCESS)
-            return;
-
-         alloc_info->pNext = &blob_info.host_ptr;
-         alloc_info->allocationSize = blob_info.shm->size;
-         blob_info.valid_fd_types = 1 << VIRGL_RESOURCE_FD_SHM;
-      }
+      args->ret = vkr_fix_mappable_info(dev, alloc_info, &blob_info);
+      if (args->ret != VK_SUCCESS)
+         return;
    }
 
    struct vkr_device_memory *mem = vkr_device_memory_create_and_add(ctx, args);
