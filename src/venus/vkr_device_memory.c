@@ -451,18 +451,6 @@ vkr_fix_export_info(struct vkr_device *dev,
    if (is_import || !export_info->handleTypes)
       return VK_SUCCESS;
 
-   if ((export_info->handleTypes & VK_EXTERNAL_MEMORY_HANDLE_TYPE_DMA_BUF_BIT_EXT) &&
-       physical_dev->is_dma_buf_fd_export_supported) {
-      local_info->export = (VkExportMemoryAllocateInfo){
-         .sType = VK_STRUCTURE_TYPE_EXPORT_MEMORY_ALLOCATE_INFO,
-         .pNext = alloc_info->pNext,
-         .handleTypes = VK_EXTERNAL_MEMORY_HANDLE_TYPE_DMA_BUF_BIT_EXT,
-      };
-      alloc_info->pNext = &local_info->export;
-      local_info->valid_fd_types = 1 << VIRGL_RESOURCE_FD_DMABUF;
-      return VK_SUCCESS;
-   }
-
    if (physical_dev->gbm_device) {
       assert(physical_dev->EXT_external_memory_dma_buf);
       const VkResult result = vkr_gbm_get_fd_info_from_allocation_info(
@@ -471,6 +459,18 @@ vkr_fix_export_info(struct vkr_device *dev,
          return result;
 
       alloc_info->pNext = &local_info->fd;
+      local_info->valid_fd_types = 1 << VIRGL_RESOURCE_FD_DMABUF;
+      return VK_SUCCESS;
+   }
+
+   if ((export_info->handleTypes & VK_EXTERNAL_MEMORY_HANDLE_TYPE_DMA_BUF_BIT_EXT) &&
+       physical_dev->is_dma_buf_fd_export_supported) {
+      local_info->export = (VkExportMemoryAllocateInfo){
+         .sType = VK_STRUCTURE_TYPE_EXPORT_MEMORY_ALLOCATE_INFO,
+         .pNext = alloc_info->pNext,
+         .handleTypes = VK_EXTERNAL_MEMORY_HANDLE_TYPE_DMA_BUF_BIT_EXT,
+      };
+      alloc_info->pNext = &local_info->export;
       local_info->valid_fd_types = 1 << VIRGL_RESOURCE_FD_DMABUF;
       return VK_SUCCESS;
    }
