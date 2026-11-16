@@ -220,8 +220,7 @@ vkr_renderer_import_resource(uint32_t ctx_id,
    TRACE_FUNC();
 
    assert(res_id);
-   assert(fd_type == VIRGL_RESOURCE_FD_DMABUF || fd_type == VIRGL_RESOURCE_FD_OPAQUE ||
-          fd_type == VIRGL_RESOURCE_FD_SHM);
+   assert(fd_type == VIRGL_RESOURCE_FD_DMABUF || fd_type == VIRGL_RESOURCE_FD_SHM);
    assert(fd >= 0);
    assert(size);
 

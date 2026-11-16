@@ -384,7 +384,25 @@ vkr_fix_import_info(struct vkr_context *ctx,
    if (!res->fd_valid)
       return false;
 
-   if (res->fd_type == VIRGL_RESOURCE_FD_SHM) {
+   switch (res->fd_type) {
+   case VIRGL_RESOURCE_FD_DMABUF: {
+      if (!physical_dev->EXT_external_memory_dma_buf)
+         return false;
+
+      int fd = os_dupfd_cloexec(res->u.fd);
+      if (fd < 0)
+         return false;
+
+      local_info->fd = (VkImportMemoryFdInfoKHR){
+         .sType = VK_STRUCTURE_TYPE_IMPORT_MEMORY_FD_INFO_KHR,
+         .pNext = res_info->pNext,
+         .fd = fd,
+         .handleType = VK_EXTERNAL_MEMORY_HANDLE_TYPE_DMA_BUF_BIT_EXT,
+      };
+      vkr_pnext_set_next(prev_of_res_info, &local_info->fd);
+      return true;
+   }
+   case VIRGL_RESOURCE_FD_SHM: {
       if (!physical_dev->EXT_external_memory_host)
          return false;
 
@@ -407,31 +425,9 @@ vkr_fix_import_info(struct vkr_context *ctx,
       alloc_info->allocationSize = shm->size;
       return true;
    }
-
-   VkExternalMemoryHandleTypeFlagBits handle_type;
-   switch (res->fd_type) {
-   case VIRGL_RESOURCE_FD_DMABUF:
-      handle_type = VK_EXTERNAL_MEMORY_HANDLE_TYPE_DMA_BUF_BIT_EXT;
-      break;
-   case VIRGL_RESOURCE_FD_OPAQUE:
-      handle_type = VK_EXTERNAL_MEMORY_HANDLE_TYPE_OPAQUE_FD_BIT;
-      break;
    default:
       return false;
    }
-
-   int fd = os_dupfd_cloexec(res->u.fd);
-   if (fd < 0)
-      return false;
-
-   local_info->fd = (VkImportMemoryFdInfoKHR){
-      .sType = VK_STRUCTURE_TYPE_IMPORT_MEMORY_FD_INFO_KHR,
-      .pNext = res_info->pNext,
-      .fd = fd,
-      .handleType = handle_type,
-   };
-   vkr_pnext_set_next(prev_of_res_info, &local_info->fd);
-   return true;
 }
 
 static VkResult
