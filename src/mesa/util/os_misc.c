@@ -56,7 +56,7 @@
 #  define LOG_TAG "MESA"
 #  include <unistd.h>
 #  include <android/log.h>
-#  include <cutils/properties.h>
+#  include <sys/system_properties.h>
 #elif DETECT_OS_LINUX || DETECT_OS_CYGWIN || DETECT_OS_SOLARIS || DETECT_OS_HURD
 #  include <unistd.h>
 #elif DETECT_OS_OPENBSD || DETECT_OS_FREEBSD
@@ -135,6 +135,11 @@ options_tbl_fini(void)
    _mesa_hash_table_destroy(options_tbl, NULL);
 }
 
+#if __ANDROID_API__ >= 26
+#undef PROP_NAME_MAX
+#define PROP_NAME_MAX 128
+#endif
+
 /**
  * Get an option value from android's property system, as a fallback to
  * getenv() (which is generally less useful on android due to processes
@@ -153,7 +158,7 @@ options_tbl_fini(void)
  *
  * Note that we use a hashtable for two purposes:
  *  1) Avoid re-translating the option name on subsequent lookups
- *  2) Avoid leaking memory.  Because property_get() returns the
+ *  2) Avoid leaking memory.  Because __system_property_get() returns the
  *     property value into a user allocated buffer, we cannot return
  *     that directly to the caller, so we need to strdup().  With the
  *     hashtable, subsquent lookups can return the existing string.
@@ -172,9 +177,9 @@ os_get_android_option(const char *name)
       return entry->data;
    }
 
-   char value[PROPERTY_VALUE_MAX];
-   char key[PROPERTY_KEY_MAX];
-   char *p = key, *end = key + PROPERTY_KEY_MAX;
+   char value[PROP_VALUE_MAX];
+   char key[PROP_NAME_MAX];
+   char *p = key, *end = key + PROP_NAME_MAX;
    /* add "mesa." prefix if necessary: */
    if (strstr(name, "MESA_") != name)
       p += strlcpy(p, "mesa.", end - p);
@@ -188,8 +193,8 @@ os_get_android_option(const char *name)
    }
 
    const char *opt = NULL;
-   int len = property_get(key, value, NULL);
-   if (len > 1) {
+   int len = __system_property_get(key, value);
+   if (len > 0) {
       opt = ralloc_strdup(options_tbl, value);
    }
 
