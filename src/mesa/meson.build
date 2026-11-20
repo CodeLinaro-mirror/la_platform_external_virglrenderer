@@ -22,6 +22,7 @@ endif
 deps_mesa = [
   m_dep,
   thread_dep,
+  android_dep,
 ]
 
 libmesa = static_library(

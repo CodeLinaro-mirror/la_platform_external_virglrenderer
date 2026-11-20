@@ -56,6 +56,7 @@ endif
 
 with_host_windows = host_machine.system() == 'windows'
 with_host_darwin = host_machine.system() == 'darwin'
+with_host_android = host_machine.system() == 'android'
 
 warnings = [
    '-Werror=enum-int-mismatch',
@@ -93,6 +94,14 @@ if not with_host_windows and not with_host_darwin
   if not cc.has_function('dlopen')
     dl_dep = cc.find_library('dl', required : true)
   endif
+endif
+android_dep = not_found
+if with_host_android
+  android_dep = declare_dependency(
+    dependencies : [
+      cc.find_library('log', required : true),
+    ],
+  )
 endif
 
 conf_data = configuration_data()
